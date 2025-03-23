@@ -3338,6 +3338,10 @@ const Plyr = {
       target: box.$content,
       props: { storage: context.storage, sync }
     });
+    box._minimized$.reaction((mini) => {
+      var _a;
+      mini && ((_a = sync.player) == null ? void 0 : _a.pause());
+    });
     context.emitter.on("destroy", () => {
       try {
         sync.dispose();
