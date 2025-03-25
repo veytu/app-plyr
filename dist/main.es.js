@@ -3231,9 +3231,6 @@ class Sync {
         mini && player.pause();
       }
     });
-    setTimeout(() => {
-      player.play();
-    });
   }
   clearBuffering() {
     this._buffering = false;

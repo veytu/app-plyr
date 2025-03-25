@@ -168,10 +168,6 @@ export class Sync {
         mini && player.pause();
       }
     });
-
-    setTimeout(() => {
-      player.play();
-    });
   }
 
   private clearBuffering() {
