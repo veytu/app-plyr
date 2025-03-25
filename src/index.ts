@@ -23,7 +23,7 @@ export interface Attributes {
 
 const DefaultAttributes: Pick<Attributes, "volume" | "paused" | "muted" | "currentTime"> = {
   volume: 1,
-  paused: false,
+  paused: true,
   muted: false,
   currentTime: 0,
 };

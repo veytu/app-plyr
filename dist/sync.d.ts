@@ -22,7 +22,6 @@ export declare class Sync {
     private _buffering_timer;
     private _disposer;
     private firstSync;
-    private appContext;
     constructor(context: AppContext<Attributes>);
     dispose(): void;
     get player(): Plyr | null;
