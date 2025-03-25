@@ -2,6 +2,7 @@ import type { NetlessApp } from "@netless/window-manager";
 import Player from "./player.svelte";
 import { Sync } from "./sync";
 import styles from "./style.scss?inline";
+import { isAndroid, isIOS } from "./environment";
 
 export interface Attributes {
   /** can only set once */
@@ -56,7 +57,11 @@ const Plyr: NetlessApp<Attributes> = {
     const sync = new Sync(context);
     const app = new Player({
       target: box.$content,
-      props: { storage: context.storage, sync },
+      props: {
+        storage: context.storage,
+        sync,
+        readonly: isIOS() || isAndroid() ? true : context?.getIsAppReadonly(),
+      },
     });
 
     // sync.behavior = "ideal";

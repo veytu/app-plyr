@@ -1,0 +1,16 @@
+export declare const isOldEdge: () => boolean;
+export declare const isIE: () => boolean;
+export declare const isWebkit: () => boolean;
+export declare const isApple: () => boolean;
+export declare const isElectron: () => boolean;
+export declare const isMacOS: () => boolean;
+export declare const isWin: () => boolean;
+export declare const isIOS: () => boolean;
+export declare const isAndroid: () => boolean;
+export declare const isFirefox: () => boolean;
+export declare const isSafari: () => boolean;
+export declare const isEdgeLegacy: () => boolean;
+export declare const isChrome: () => boolean;
+export declare const isChromeLegacy: () => boolean;
+export declare const isFirefoxLegacy: () => boolean;
+export declare const is_QQBrowser: () => boolean;
