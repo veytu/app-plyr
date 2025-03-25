@@ -26,10 +26,13 @@ export class Sync {
   private _buffering_timer = 0;
   private _disposer: (() => void) | null = null;
   private firstSync = false;
+  private appContext: AppContext<Attributes>;
 
   constructor(readonly context: AppContext<Attributes>) {
     const room = context.getRoom();
     const player = context.getDisplayer() as Player;
+    const appContext = context;
+    this.appContext = appContext;
 
     this.uid = room ? room.uid : "";
     this.getTimestamp = room
@@ -37,16 +40,6 @@ export class Sync {
       : () => player.beginTimestamp + player.progressTime;
 
     this._disposer = this.context.storage.addStateChangedListener(this.syncAll.bind(this));
-
-    const box = context.getBox();
-
-    box._minimized$.reaction((mini: boolean) => {
-      const { storage } = context;
-      const { owner } = storage.state;
-      if (this.behavior == "owner" && owner === this.uid) {
-        mini && this.player?.pause();
-      }
-    });
   }
 
   dispose() {
@@ -170,6 +163,15 @@ export class Sync {
     });
     player.on("pause", () => {
       this.isOwner() && this.dispatchPlayPause(player);
+    });
+
+    const box = this.context.getBox();
+    box.events.on("minimized", mini => {
+      const { storage } = this.context;
+      const { owner } = storage.state;
+      if (this.behavior == "owner" && owner === this.uid) {
+        mini && player.pause();
+      }
     });
   }
 

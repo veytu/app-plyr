@@ -3116,18 +3116,11 @@ class Sync {
     this.firstSync = false;
     const room = context.getRoom();
     const player = context.getDisplayer();
+    const appContext = context;
+    this.appContext = appContext;
     this.uid = room ? room.uid : "";
     this.getTimestamp = room ? () => room.calibrationTimestamp : () => player.beginTimestamp + player.progressTime;
     this._disposer = this.context.storage.addStateChangedListener(this.syncAll.bind(this));
-    const box = context.getBox();
-    box._minimized$.reaction((mini) => {
-      var _a;
-      const { storage } = context;
-      const { owner } = storage.state;
-      if (this.behavior == "owner" && owner === this.uid) {
-        mini && ((_a = this.player) == null ? void 0 : _a.pause());
-      }
-    });
   }
   dispose() {
     this._disposer && this._disposer();
@@ -3233,6 +3226,14 @@ class Sync {
     });
     player.on("pause", () => {
       this.isOwner() && this.dispatchPlayPause(player);
+    });
+    const box = this.context.getBox();
+    box.events.on("minimized", (mini) => {
+      const { storage } = this.context;
+      const { owner } = storage.state;
+      if (this.behavior == "owner" && owner === this.uid) {
+        mini && player.pause();
+      }
     });
   }
   clearBuffering() {
