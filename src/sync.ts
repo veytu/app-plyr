@@ -37,6 +37,16 @@ export class Sync {
       : () => player.beginTimestamp + player.progressTime;
 
     this._disposer = this.context.storage.addStateChangedListener(this.syncAll.bind(this));
+
+    const box = context.getBox();
+
+    box._minimized$.reaction((mini: boolean) => {
+      const { storage } = context;
+      const { owner } = storage.state;
+      if (this.behavior == "owner" && owner === this.uid) {
+        mini && this.player?.pause();
+      }
+    });
   }
 
   dispose() {

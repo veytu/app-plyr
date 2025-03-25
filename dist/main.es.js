@@ -3119,6 +3119,15 @@ class Sync {
     this.uid = room ? room.uid : "";
     this.getTimestamp = room ? () => room.calibrationTimestamp : () => player.beginTimestamp + player.progressTime;
     this._disposer = this.context.storage.addStateChangedListener(this.syncAll.bind(this));
+    const box = context.getBox();
+    box._minimized$.reaction((mini) => {
+      var _a;
+      const { storage } = context;
+      const { owner } = storage.state;
+      if (this.behavior == "owner" && owner === this.uid) {
+        mini && ((_a = this.player) == null ? void 0 : _a.pause());
+      }
+    });
   }
   dispose() {
     this._disposer && this._disposer();
@@ -3337,10 +3346,6 @@ const Plyr = {
     const app = new Player({
       target: box.$content,
       props: { storage: context.storage, sync }
-    });
-    box._minimized$.reaction((mini) => {
-      var _a;
-      mini && ((_a = sync.player) == null ? void 0 : _a.pause());
     });
     context.emitter.on("destroy", () => {
       try {

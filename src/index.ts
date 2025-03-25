@@ -61,10 +61,6 @@ const Plyr: NetlessApp<Attributes> = {
 
     // sync.behavior = "ideal";
 
-    box._minimized$.reaction((mini: boolean) => {
-      mini && sync.player?.pause();
-    });
-
     if (import.meta.env.DEV) {
       Object.assign(window, {
         media_player: { sync, app },
