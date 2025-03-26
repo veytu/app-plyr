@@ -21,3 +21,15 @@
   --plyr-audio-controls-background: #121212;
   --plyr-audio-control-color: #eee;
 }
+
+.disbale-progress {
+  .plyr__progress {
+    pointer-events: none;
+  }
+}
+
+.disbale-progress {
+  &.plyr__progress {
+    pointer-events: none;
+  }
+}

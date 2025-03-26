@@ -30,7 +30,11 @@
       }
       player = new Plyr(player_element, {
         fullscreen: { enabled: false },
-        controls: readonly ? [] : ["play", "progress", "current-time", "mute", "volume"],
+        controls: readonly
+          ? type?.startsWith("audio/")
+            ? ["progress", "current-time"]
+            : []
+          : ["play", "progress", "current-time", "mute", "volume"],
         clickToPlay: false,
         youtube: { autoplay: true },
       });
@@ -68,6 +72,7 @@
     crossorigin="anonymous"
     data-poster={poster}
     bind:this={player_element}
+    class={readonly ? "disbale-progress" : ""}
   >
     <source {src} {type} />
   </audio>

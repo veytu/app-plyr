@@ -23,7 +23,17 @@ export async function safePlay(player: Plyr): Promise<boolean> {
     return false;
   }
 }
+export function getFileExtension(url: string) {
+  const path = new URL(url).pathname;
 
+  const ext = path.split(".").pop();
+
+  if (ext === path || ext?.includes("/")) {
+    return null; // 无效扩展名或路径
+  }
+
+  return ext?.toLocaleLowerCase();
+}
 export function importScript(src: string): Promise<void> {
   const script = document.createElement("script");
   return new Promise<void>((resolve, reject) => {

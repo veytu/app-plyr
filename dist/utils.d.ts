@@ -4,6 +4,7 @@ export declare function youtube_parseId(url: string): string;
  * Return `true` means ok, `false` means some error occurs.
  */
 export declare function safePlay(player: Plyr): Promise<boolean>;
+export declare function getFileExtension(url: string): string | null | undefined;
 export declare function importScript(src: string): Promise<void>;
 import type Hls from "hls.js";
 export declare function loadHLS(): Promise<Hls>;
