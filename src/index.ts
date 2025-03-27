@@ -60,8 +60,12 @@ const Plyr: NetlessApp<Attributes> = {
       props: {
         storage: context.storage,
         sync,
-        readonly: isIOS() || isAndroid() ? true : context?.getIsAppReadonly(),
+        readonly: isIOS() || isAndroid() ? true : context?.getIsWritable(),
       },
+    });
+
+    context.emitter.on("writableChange", writable => {
+      app.$set({ readonly: !writable });
     });
 
     // sync.behavior = "ideal";

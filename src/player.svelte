@@ -7,6 +7,7 @@
   import { guessTypeFromSrc, hlsTypes } from "./mime";
   import { cannotPlayHLSNatively, loadHLS } from "./utils";
   import Plyr from "plyr";
+  import { isAndroid, isIOS } from "./environment";
 
   export let storage: Storage<Attributes>;
   export let sync: Sync;
@@ -30,11 +31,10 @@
       }
       player = new Plyr(player_element, {
         fullscreen: { enabled: false },
-        controls: readonly
-          ? type?.startsWith("audio/")
-            ? ["progress", "current-time"]
-            : []
-          : ["play", "progress", "current-time", "mute", "volume"],
+        controls:
+          isIOS() || isAndroid()
+            ? ["progress", "current-time", "volume"]
+            : ["play", "progress", "current-time", "mute", "volume"],
         clickToPlay: false,
         youtube: { autoplay: true },
       });
@@ -84,6 +84,7 @@
     playsinline
     data-poster={poster}
     bind:this={player_element}
+    class={readonly ? "disbale-progress" : ""}
   >
     <source {src} {type} />
   </video>

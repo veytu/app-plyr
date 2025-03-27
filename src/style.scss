@@ -26,10 +26,16 @@
   .plyr__progress {
     pointer-events: none;
   }
+  .plyr__volume {
+    pointer-events: none;
+  }
 }
 
 .disbale-progress {
   &.plyr__progress {
+    pointer-events: none;
+  }
+  &.plyr__volume {
     pointer-events: none;
   }
 }
