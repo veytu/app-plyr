@@ -7,7 +7,6 @@
   import { guessTypeFromSrc, hlsTypes } from "./mime";
   import { cannotPlayHLSNatively, loadHLS } from "./utils";
   import Plyr from "plyr";
-  import { isAndroid, isIOS } from "./environment";
 
   export let storage: Storage<Attributes>;
   export let sync: Sync;
@@ -32,9 +31,7 @@
       }
       player = new Plyr(player_element, {
         fullscreen: { enabled: false },
-        controls: isMobile
-          ? ["progress", "current-time", "mute", "volume"]
-          : ["play", "progress", "current-time", "mute", "volume"],
+        controls: ["play", "progress", "current-time", "mute", "volume"],
         clickToPlay: false,
         youtube: { autoplay: true },
       });
@@ -72,7 +69,7 @@
     crossorigin="anonymous"
     data-poster={poster}
     bind:this={player_element}
-    class={`${readonly ? "disbale-progress" : ""} ${isIOS() || isAndroid() ? "hide-control" : ""}`}
+    class={`${readonly ? "disbale-progress" : ""} ${isMobile ? "hide-control" : ""}`}
     playsinline
   >
     <source {src} {type} />
@@ -85,7 +82,7 @@
     playsinline
     data-poster={poster}
     bind:this={player_element}
-    class={`${readonly ? "disbale-progress" : ""} ${isIOS() || isAndroid() ? "hide-control" : ""}`}
+    class={`${readonly ? "disbale-progress" : ""} ${isMobile ? "hide-control" : ""}`}
   >
     <source {src} {type} />
   </video>

@@ -56,6 +56,7 @@ const Plyr: NetlessApp<Attributes> = {
     const box = context.getBox();
 
     box.mountStyles(styles);
+    box.$box.classList.toggle("is-mobile", isIOS() || isAndroid());
 
     const sync = new Sync(context);
     const app = new Player({

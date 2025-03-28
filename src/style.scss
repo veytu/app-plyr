@@ -39,3 +39,15 @@
     pointer-events: none;
   }
 }
+
+.is-mobile {
+  .plyr__progress {
+    pointer-events: none;
+  }
+  .plyr__volume {
+    pointer-events: none;
+  }
+  .plyr__control {
+    display: none;
+  }
+}
