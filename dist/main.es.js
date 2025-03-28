@@ -3353,7 +3353,9 @@ const Plyr = {
   },
   setup(context) {
     const storage = context.storage;
-    storage.ensureState(DefaultAttributes);
+    if (context == null ? void 0 : context.getIsWritable()) {
+      storage.ensureState(DefaultAttributes);
+    }
     if (!storage.state.src) {
       context.emitter.emit("destroy", {
         error: new Error(`[Plyr]: missing "src"`)

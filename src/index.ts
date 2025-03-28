@@ -37,7 +37,10 @@ const Plyr: NetlessApp<Attributes> = {
   },
   setup(context) {
     const storage = context.storage;
-    storage.ensureState(DefaultAttributes);
+
+    if (context?.getIsWritable()) {
+      storage.ensureState(DefaultAttributes);
+    }
 
     if (!storage.state.src) {
       context.emitter.emit("destroy", {
