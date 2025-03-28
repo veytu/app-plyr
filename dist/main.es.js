@@ -3370,11 +3370,11 @@ const Plyr = {
       props: {
         storage: context.storage,
         sync,
-        readonly: isIOS() || isAndroid() ? true : context == null ? void 0 : context.getIsWritable()
+        readonly: isIOS() || isAndroid() || !(context == null ? void 0 : context.getIsWritable())
       }
     });
     context.emitter.on("writableChange", (writable) => {
-      app.$set({ readonly: !writable });
+      app.$set({ readonly: isIOS() || isAndroid() || !writable });
     });
     context.emitter.on("destroy", () => {
       try {
