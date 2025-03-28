@@ -64,6 +64,7 @@ const Plyr: NetlessApp<Attributes> = {
         storage: context.storage,
         sync,
         readonly: isIOS() || isAndroid() || !context?.getIsWritable(),
+        isMobile: isIOS() || isAndroid(),
       },
     });
 

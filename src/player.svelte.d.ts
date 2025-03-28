@@ -8,6 +8,7 @@ export declare interface PlayerProps {
   storage?: AppContext<Attributes>["storage"];
   sync?: Sync;
   readonly?: boolean;
+  isMobile?: boolean;
 }
 
 declare class Player extends SvelteComponentTyped<PlayerProps> {}

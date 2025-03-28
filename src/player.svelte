@@ -12,6 +12,7 @@
   export let storage: Storage<Attributes>;
   export let sync: Sync;
   export let readonly: boolean;
+  export let isMobile: boolean;
 
   const type = storage.state.provider
     ? undefined
@@ -31,10 +32,9 @@
       }
       player = new Plyr(player_element, {
         fullscreen: { enabled: false },
-        controls:
-          isIOS() || isAndroid()
-            ? ["progress", "current-time", "mute", "volume"]
-            : ["play", "progress", "current-time", "mute", "volume"],
+        controls: isMobile
+          ? ["progress", "current-time", "mute", "volume"]
+          : ["play", "progress", "current-time", "mute", "volume"],
         clickToPlay: false,
         youtube: { autoplay: true },
       });

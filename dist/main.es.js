@@ -2895,7 +2895,7 @@ function create_else_block(ctx) {
     m(target, anchor) {
       insert(target, video, anchor);
       append(video, source2);
-      ctx[9](video);
+      ctx[10](video);
     },
     p(ctx2, dirty) {
       if (dirty & 2 && video_class_value !== (video_class_value = `${ctx2[1] ? "disbale-progress" : ""} ${isIOS() || isAndroid() ? "hide-control" : ""}`)) {
@@ -2905,7 +2905,7 @@ function create_else_block(ctx) {
     d(detaching) {
       if (detaching)
         detach(video);
-      ctx[9](null);
+      ctx[10](null);
     }
   };
 }
@@ -2930,7 +2930,7 @@ function create_if_block_2(ctx) {
     m(target, anchor) {
       insert(target, audio, anchor);
       append(audio, source2);
-      ctx[8](audio);
+      ctx[9](audio);
     },
     p(ctx2, dirty) {
       if (dirty & 2 && audio_class_value !== (audio_class_value = `${ctx2[1] ? "disbale-progress" : ""} ${isIOS() || isAndroid() ? "hide-control" : ""}`)) {
@@ -2940,7 +2940,7 @@ function create_if_block_2(ctx) {
     d(detaching) {
       if (detaching)
         detach(audio);
-      ctx[8](null);
+      ctx[9](null);
     }
   };
 }
@@ -2991,13 +2991,13 @@ function create_if_block(ctx) {
     },
     m(target, anchor) {
       insert(target, div, anchor);
-      ctx[7](div);
+      ctx[8](div);
     },
     p: noop$1,
     d(detaching) {
       if (detaching)
         detach(div);
-      ctx[7](null);
+      ctx[8](null);
     }
   };
 }
@@ -3051,6 +3051,7 @@ function instance($$self, $$props, $$invalidate) {
   let { storage } = $$props;
   let { sync } = $$props;
   let { readonly } = $$props;
+  let { isMobile } = $$props;
   const type = storage.state.provider ? void 0 : storage.state.type || guessTypeFromSrc(storage.state.src);
   const { src, poster } = storage.state;
   const useHLS = hlsTypes.includes(String(type).toLowerCase());
@@ -3065,7 +3066,7 @@ function instance($$self, $$props, $$invalidate) {
       }
       player = new Plyr$1(player_element, {
         fullscreen: { enabled: false },
-        controls: isIOS() || isAndroid() ? ["progress", "current-time", "mute", "volume"] : ["play", "progress", "current-time", "mute", "volume"],
+        controls: isMobile ? ["progress", "current-time", "mute", "volume"] : ["play", "progress", "current-time", "mute", "volume"],
         clickToPlay: false,
         youtube: { autoplay: true }
       });
@@ -3105,6 +3106,8 @@ function instance($$self, $$props, $$invalidate) {
       $$invalidate(6, sync = $$props2.sync);
     if ("readonly" in $$props2)
       $$invalidate(1, readonly = $$props2.readonly);
+    if ("isMobile" in $$props2)
+      $$invalidate(7, isMobile = $$props2.isMobile);
   };
   return [
     storage,
@@ -3114,6 +3117,7 @@ function instance($$self, $$props, $$invalidate) {
     src,
     poster,
     sync,
+    isMobile,
     div_binding,
     audio_binding,
     video_binding
@@ -3122,7 +3126,12 @@ function instance($$self, $$props, $$invalidate) {
 class Player extends SvelteComponent {
   constructor(options) {
     super();
-    init(this, options, instance, create_fragment, safe_not_equal, { storage: 0, sync: 6, readonly: 1 });
+    init(this, options, instance, create_fragment, safe_not_equal, {
+      storage: 0,
+      sync: 6,
+      readonly: 1,
+      isMobile: 7
+    });
   }
 }
 class Sync {
@@ -3373,7 +3382,8 @@ const Plyr = {
       props: {
         storage: context.storage,
         sync,
-        readonly: isIOS() || isAndroid() || !(context == null ? void 0 : context.getIsWritable())
+        readonly: isIOS() || isAndroid() || !(context == null ? void 0 : context.getIsWritable()),
+        isMobile: isIOS() || isAndroid()
       }
     });
     context.emitter.on("writableChange", (writable) => {
