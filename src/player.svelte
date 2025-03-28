@@ -33,7 +33,7 @@
         fullscreen: { enabled: false },
         controls:
           isIOS() || isAndroid()
-            ? ["progress", "current-time", "volume"]
+            ? ["progress", "current-time", "mute", "volume"]
             : ["play", "progress", "current-time", "mute", "volume"],
         clickToPlay: false,
         youtube: { autoplay: true },
@@ -72,7 +72,8 @@
     crossorigin="anonymous"
     data-poster={poster}
     bind:this={player_element}
-    class={readonly ? "disbale-progress" : ""}
+    class={`${readonly ? "disbale-progress" : ""} ${isIOS() || isAndroid() ? "hide-control" : ""}`}
+    playsinline
   >
     <source {src} {type} />
   </audio>
@@ -84,7 +85,7 @@
     playsinline
     data-poster={poster}
     bind:this={player_element}
-    class={readonly ? "disbale-progress" : ""}
+    class={`${readonly ? "disbale-progress" : ""} ${isIOS() || isAndroid() ? "hide-control" : ""}`}
   >
     <source {src} {type} />
   </video>

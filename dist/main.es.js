@@ -2890,7 +2890,7 @@ function create_else_block(ctx) {
       attr(video, "crossorigin", "anonymous");
       video.playsInline = true;
       attr(video, "data-poster", ctx[5]);
-      attr(video, "class", video_class_value = ctx[1] ? "disbale-progress" : "");
+      attr(video, "class", video_class_value = `${ctx[1] ? "disbale-progress" : ""} ${isIOS() || isAndroid() ? "hide-control" : ""}`);
     },
     m(target, anchor) {
       insert(target, video, anchor);
@@ -2898,7 +2898,7 @@ function create_else_block(ctx) {
       ctx[9](video);
     },
     p(ctx2, dirty) {
-      if (dirty & 2 && video_class_value !== (video_class_value = ctx2[1] ? "disbale-progress" : "")) {
+      if (dirty & 2 && video_class_value !== (video_class_value = `${ctx2[1] ? "disbale-progress" : ""} ${isIOS() || isAndroid() ? "hide-control" : ""}`)) {
         attr(video, "class", video_class_value);
       }
     },
@@ -2924,7 +2924,8 @@ function create_if_block_2(ctx) {
       attr(audio, "data-app-kind", "Plyr");
       attr(audio, "crossorigin", "anonymous");
       attr(audio, "data-poster", ctx[5]);
-      attr(audio, "class", audio_class_value = ctx[1] ? "disbale-progress" : "");
+      attr(audio, "class", audio_class_value = `${ctx[1] ? "disbale-progress" : ""} ${isIOS() || isAndroid() ? "hide-control" : ""}`);
+      attr(audio, "playsinline", "");
     },
     m(target, anchor) {
       insert(target, audio, anchor);
@@ -2932,7 +2933,7 @@ function create_if_block_2(ctx) {
       ctx[8](audio);
     },
     p(ctx2, dirty) {
-      if (dirty & 2 && audio_class_value !== (audio_class_value = ctx2[1] ? "disbale-progress" : "")) {
+      if (dirty & 2 && audio_class_value !== (audio_class_value = `${ctx2[1] ? "disbale-progress" : ""} ${isIOS() || isAndroid() ? "hide-control" : ""}`)) {
         attr(audio, "class", audio_class_value);
       }
     },
@@ -3064,7 +3065,7 @@ function instance($$self, $$props, $$invalidate) {
       }
       player = new Plyr$1(player_element, {
         fullscreen: { enabled: false },
-        controls: isIOS() || isAndroid() ? ["progress", "current-time", "volume"] : ["play", "progress", "current-time", "mute", "volume"],
+        controls: isIOS() || isAndroid() ? ["progress", "current-time", "mute", "volume"] : ["play", "progress", "current-time", "mute", "volume"],
         clickToPlay: false,
         youtube: { autoplay: true }
       });
