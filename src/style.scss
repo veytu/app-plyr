@@ -6,15 +6,31 @@
   height: 100%;
 }
 
-.plyr--audio {
+.plyr--audio-wrp {
   width: 100%;
   height: 100%;
   display: flex;
-  align-items: stretch;
-  justify-content: center;
-  background-color: #fff;
+  align-items: center;
 }
 
+.plyr--audio {
+  width: 120%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  background-color: none;
+  --plyr-audio-controls-background: rgba(0, 0, 0, 0.5);
+  --plyr-audio-control-color: #fff;
+  border-radius: 12px;
+}
+.plyr__close {
+  img {
+    width: 24px;
+    height: 24px;
+  }
+}
 .telebox-color-scheme-dark .plyr--audio {
   color-scheme: dark;
   background-color: #121212;

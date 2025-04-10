@@ -3,7 +3,9 @@ import Player from "./player.svelte";
 import { Sync } from "./sync";
 import styles from "./style.scss?inline";
 import { isAndroid, isIOS } from "./environment";
-
+import { guessTypeFromSrc } from "./mime";
+import closeSvg from "./assets/close.svg";
+const ClickThroughAppliances = new Set(["clicker"]);
 export interface Attributes {
   /** can only set once */
   src: string;
@@ -53,7 +55,10 @@ const Plyr: NetlessApp<Attributes> = {
       console.warn(`[Plyr]: missing "type", will guess from file extension`);
     }
 
+    const type = storage.state.type || guessTypeFromSrc(storage.state.src);
+
     const box = context.getBox();
+    const room = context.getRoom();
 
     box.mountStyles(styles);
     box.$box.classList.toggle("is-mobile", isIOS() || isAndroid());
@@ -90,6 +95,57 @@ const Plyr: NetlessApp<Attributes> = {
         // console.warn("[Plyr] destroy failed", err);
       }
     });
+
+    const shouldClickThrough = (tool: string) => {
+      return ClickThroughAppliances.has(tool);
+    };
+    if (type?.startsWith("audio/")) {
+      box.$box.style.pointerEvents = "none";
+      box.$titleBar.style.display = "none";
+      const wrp: HTMLDivElement | null = box.$box.querySelector(".telebox-content-wrap");
+      if (wrp) {
+        wrp.style.background = "none";
+      }
+
+      const content: HTMLDivElement | null = box.$box.querySelector(".telebox-content");
+
+      if (content) {
+        content.style.background = "none";
+        const p: HTMLDivElement | null = content.querySelector(".plyr__controls");
+
+        if (p) {
+          const close = document.createElement("button");
+          close.className = "plyr__controls__item plyr__close plyr__control";
+          const img = document.createElement("img");
+
+          img.src = closeSvg;
+          close.appendChild(img);
+          close.addEventListener("click", e => {
+            e.preventDefault();
+            e.stopPropagation();
+            box._delegateEvents.emit("close");
+          });
+          p.appendChild(close);
+          const toggleClickThrough = (enable?: boolean) => {
+            p.style.pointerEvents = enable ? "none" : "auto";
+            img.style.display = enable ? "none" : "block";
+          };
+
+          if (room?.state.memberState.currentApplianceName) {
+            toggleClickThrough(!shouldClickThrough(room?.state.memberState.currentApplianceName));
+          }
+
+          if (room) {
+            const onRoomStateChanged = (e: { memberState: { currentApplianceName: string } }) => {
+              if (e.memberState) {
+                toggleClickThrough(!shouldClickThrough(e.memberState.currentApplianceName));
+              }
+            };
+            room.callbacks.on("onRoomStateChanged", onRoomStateChanged);
+          }
+        }
+      }
+    }
   },
 };
 
