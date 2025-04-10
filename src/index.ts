@@ -105,6 +105,10 @@ const Plyr: NetlessApp<Attributes> = {
       const wrp: HTMLDivElement | null = box.$box.querySelector(".telebox-content-wrap");
       if (wrp) {
         wrp.style.background = "none";
+        const boxMain: HTMLDivElement | null = box.$box.querySelector(".telebox-box-main");
+        if (boxMain) {
+          boxMain.style.background = "none";
+        }
       }
 
       const content: HTMLDivElement | null = box.$box.querySelector(".telebox-content");
@@ -128,7 +132,7 @@ const Plyr: NetlessApp<Attributes> = {
           p.appendChild(close);
           const toggleClickThrough = (enable?: boolean) => {
             p.style.pointerEvents = enable ? "none" : "auto";
-            img.style.display = enable ? "none" : "block";
+            img.style.visibility = enable ? "hidden" : "visible";
           };
 
           if (room?.state.memberState.currentApplianceName) {
