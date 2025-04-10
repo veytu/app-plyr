@@ -108,6 +108,7 @@ const Plyr: NetlessApp<Attributes> = {
         const boxMain: HTMLDivElement | null = box.$box.querySelector(".telebox-box-main");
         if (boxMain) {
           boxMain.style.background = "none";
+          boxMain.style.pointerEvents = "none";
         }
       }
 

@@ -3413,6 +3413,7 @@ const Plyr = {
         const boxMain = box.$box.querySelector(".telebox-box-main");
         if (boxMain) {
           boxMain.style.background = "none";
+          boxMain.style.pointerEvents = "none";
         }
       }
       const content = box.$box.querySelector(".telebox-content");
