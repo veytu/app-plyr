@@ -9,6 +9,7 @@ export declare interface PlayerProps {
   sync?: Sync;
   readonly?: boolean;
   isMobile?: boolean;
+  onLoad?: () => void;
 }
 
 declare class Player extends SvelteComponentTyped<PlayerProps> {}

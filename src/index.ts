@@ -63,6 +63,16 @@ const Plyr: NetlessApp<Attributes> = {
     box.mountStyles(styles);
     box.$box.classList.toggle("is-mobile", isIOS() || isAndroid());
 
+    const loading = document.createElement("div");
+    loading.className = "app-plyr-loading";
+    const loader = document.createElement("div");
+    loader.className = "app-plyr-loader";
+    loading.appendChild(loader);
+
+    if (type?.startsWith("video/")) {
+      box.$content.appendChild(loading);
+    }
+
     const sync = new Sync(context);
     const app = new Player({
       target: box.$content,
@@ -73,6 +83,10 @@ const Plyr: NetlessApp<Attributes> = {
         isMobile: isIOS() || isAndroid(),
       },
     });
+
+    setTimeout(() => {
+      loading.remove();
+    }, 300);
 
     context.emitter.on("writableChange", writable => {
       app.$set({ readonly: isIOS() || isAndroid() || !writable });
@@ -99,6 +113,7 @@ const Plyr: NetlessApp<Attributes> = {
     const shouldClickThrough = (tool: string) => {
       return ClickThroughAppliances.has(tool);
     };
+
     if (type?.startsWith("audio/")) {
       box.$box.style.pointerEvents = "none";
       box.$titleBar.style.display = "none";
