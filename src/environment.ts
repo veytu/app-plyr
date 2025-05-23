@@ -29,13 +29,11 @@ export const isIOS = () => {
   return (
     typeof navigator !== "undefined" &&
     typeof window !== "undefined" &&
-    // /iPad|iPhone|iPod/.test(_ua)
-    /iphone/i.test(_ua.toLowerCase()) || /ios/i.test(_ua.toLowerCase()) || /ipad/i.test(_ua.toLowerCase()) || /ipod/i.test(_ua.toLowerCase())
+    /iPad|iPhone|iPod/.test(_ua)
   );
 };
 export const isAndroid = () => {
-  // return typeof navigator !== "undefined" && /Android/.test(_ua);
-  return /android/i.test(_ua.toLowerCase()) || /huawei/i.test(_ua.toLowerCase());
+  return typeof navigator !== "undefined" && /Android/.test(_ua);
 };
 export const isFirefox = () => {
   return typeof navigator !== "undefined" && /^(?!.*Seamonkey)(?=.*Firefox).*/i.test(_ua);
