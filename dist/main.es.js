@@ -1,34 +1,3 @@
-var __defProp = Object.defineProperty;
-var __defProps = Object.defineProperties;
-var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
-var __getOwnPropSymbols = Object.getOwnPropertySymbols;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __propIsEnum = Object.prototype.propertyIsEnumerable;
-var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-var __spreadValues = (a, b) => {
-  for (var prop in b || (b = {}))
-    if (__hasOwnProp.call(b, prop))
-      __defNormalProp(a, prop, b[prop]);
-  if (__getOwnPropSymbols)
-    for (var prop of __getOwnPropSymbols(b)) {
-      if (__propIsEnum.call(b, prop))
-        __defNormalProp(a, prop, b[prop]);
-    }
-  return a;
-};
-var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
-var __objRest = (source2, exclude) => {
-  var target = {};
-  for (var prop in source2)
-    if (__hasOwnProp.call(source2, prop) && exclude.indexOf(prop) < 0)
-      target[prop] = source2[prop];
-  if (source2 != null && __getOwnPropSymbols)
-    for (var prop of __getOwnPropSymbols(source2)) {
-      if (exclude.indexOf(prop) < 0 && __propIsEnum.call(source2, prop))
-        target[prop] = source2[prop];
-    }
-  return target;
-};
 var _a;
 function noop$1() {
 }
@@ -65,7 +34,9 @@ function insert(target, node, anchor) {
   target.insertBefore(node, anchor || null);
 }
 function detach(node) {
-  node.parentNode.removeChild(node);
+  if (node.parentNode) {
+    node.parentNode.removeChild(node);
+  }
 }
 function element(name) {
   return document.createElement(name);
@@ -87,8 +58,9 @@ function children(element2) {
 }
 function set_data(text2, data) {
   data = "" + data;
-  if (text2.wholeText !== data)
-    text2.data = data;
+  if (text2.data === data)
+    return;
+  text2.data = data;
 }
 let current_component;
 function set_current_component(component) {
@@ -107,9 +79,9 @@ function onDestroy(fn) {
 }
 const dirty_components = [];
 const binding_callbacks = [];
-const render_callbacks = [];
+let render_callbacks = [];
 const flush_callbacks = [];
-const resolved_promise = Promise.resolve();
+const resolved_promise = /* @__PURE__ */ Promise.resolve();
 let update_scheduled = false;
 function schedule_update() {
   if (!update_scheduled) {
@@ -123,13 +95,22 @@ function add_render_callback(fn) {
 const seen_callbacks = /* @__PURE__ */ new Set();
 let flushidx = 0;
 function flush() {
+  if (flushidx !== 0) {
+    return;
+  }
   const saved_component = current_component;
   do {
-    while (flushidx < dirty_components.length) {
-      const component = dirty_components[flushidx];
-      flushidx++;
-      set_current_component(component);
-      update(component.$$);
+    try {
+      while (flushidx < dirty_components.length) {
+        const component = dirty_components[flushidx];
+        flushidx++;
+        set_current_component(component);
+        update(component.$$);
+      }
+    } catch (e) {
+      dirty_components.length = 0;
+      flushidx = 0;
+      throw e;
     }
     set_current_component(null);
     dirty_components.length = 0;
@@ -162,6 +143,13 @@ function update($$) {
     $$.after_update.forEach(add_render_callback);
   }
 }
+function flush_render_callbacks(fns) {
+  const filtered = [];
+  const targets = [];
+  render_callbacks.forEach((c) => fns.indexOf(c) === -1 ? filtered.push(c) : targets.push(c));
+  targets.forEach((c) => c());
+  render_callbacks = filtered;
+}
 const outroing = /* @__PURE__ */ new Set();
 function transition_in(block, local) {
   if (block && block.i) {
@@ -170,13 +158,13 @@ function transition_in(block, local) {
   }
 }
 function mount_component(component, target, anchor, customElement) {
-  const { fragment, on_mount, on_destroy, after_update } = component.$$;
+  const { fragment, after_update } = component.$$;
   fragment && fragment.m(target, anchor);
   if (!customElement) {
     add_render_callback(() => {
-      const new_on_destroy = on_mount.map(run).filter(is_function);
-      if (on_destroy) {
-        on_destroy.push(...new_on_destroy);
+      const new_on_destroy = component.$$.on_mount.map(run).filter(is_function);
+      if (component.$$.on_destroy) {
+        component.$$.on_destroy.push(...new_on_destroy);
       } else {
         run_all(new_on_destroy);
       }
@@ -188,6 +176,7 @@ function mount_component(component, target, anchor, customElement) {
 function destroy_component(component, detaching) {
   const $$ = component.$$;
   if ($$.fragment !== null) {
+    flush_render_callbacks($$.after_update);
     run_all($$.on_destroy);
     $$.fragment && $$.fragment.d(detaching);
     $$.on_destroy = $$.fragment = null;
@@ -207,7 +196,7 @@ function init(component, options, instance2, create_fragment2, not_equal, props,
   set_current_component(component);
   const $$ = component.$$ = {
     fragment: null,
-    ctx: null,
+    ctx: [],
     props,
     update: noop$1,
     not_equal,
@@ -260,6 +249,9 @@ class SvelteComponent {
     this.$destroy = noop$1;
   }
   $on(type, callback) {
+    if (!is_function(callback)) {
+      return noop$1;
+    }
     const callbacks = this.$$.callbacks[type] || (this.$$.callbacks[type] = []);
     callbacks.push(callback);
     return () => {
@@ -452,7 +444,23 @@ function first(maybeArray) {
   return Array.isArray(maybeArray) ? maybeArray[0] : maybeArray;
 }
 function _defineProperty$1(e, t, i) {
-  return t in e ? Object.defineProperty(e, t, { value: i, enumerable: true, configurable: true, writable: true }) : e[t] = i, e;
+  return (t = _toPropertyKey(t)) in e ? Object.defineProperty(e, t, { value: i, enumerable: true, configurable: true, writable: true }) : e[t] = i, e;
+}
+function _toPrimitive(e, t) {
+  if ("object" != typeof e || null === e)
+    return e;
+  var i = e[Symbol.toPrimitive];
+  if (void 0 !== i) {
+    var s = i.call(e, t || "default");
+    if ("object" != typeof s)
+      return s;
+    throw new TypeError("@@toPrimitive must return a primitive value.");
+  }
+  return ("string" === t ? String : Number)(e);
+}
+function _toPropertyKey(e) {
+  var t = _toPrimitive(e, "string");
+  return "symbol" == typeof t ? t : String(t);
 }
 function _classCallCheck(e, t) {
   if (!(e instanceof t))
@@ -482,7 +490,7 @@ function ownKeys(e, t) {
 }
 function _objectSpread2(e) {
   for (var t = 1; t < arguments.length; t++) {
-    var i = arguments[t] != null ? arguments[t] : {};
+    var i = null != arguments[t] ? arguments[t] : {};
     t % 2 ? ownKeys(Object(i), true).forEach(function(t2) {
       _defineProperty(e, t2, i[t2]);
     }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(i)) : ownKeys(Object(i)).forEach(function(t2) {
@@ -504,11 +512,11 @@ function trigger(e, t) {
   }
 }
 var getConstructor$1 = function(e) {
-  return e != null ? e.constructor : null;
+  return null != e ? e.constructor : null;
 }, instanceOf$1 = function(e, t) {
   return !!(e && t && e instanceof t);
 }, isNullOrUndefined$1 = function(e) {
-  return e == null;
+  return null == e;
 }, isObject$1 = function(e) {
   return getConstructor$1(e) === Object;
 }, isNumber$1 = function(e) {
@@ -562,9 +570,9 @@ var RangeTouch = function() {
     var i, s = t.target, n = t.changedTouches[0], r = parseFloat(s.getAttribute("min")) || 0, a = parseFloat(s.getAttribute("max")) || 100, o = parseFloat(s.getAttribute("step")) || 1, l = s.getBoundingClientRect(), c = 100 / l.width * (this.config.thumbWidth / 2) / 100;
     return 0 > (i = 100 / l.width * (n.clientX - l.left)) ? i = 0 : 100 < i && (i = 100), 50 > i ? i -= (100 - 2 * i) * c : 50 < i && (i += 2 * (i - 50) * c), r + round(i / 100 * (a - r), o);
   } }, { key: "set", value: function(t) {
-    e.enabled && is$1.event(t) && !t.target.disabled && (t.preventDefault(), t.target.value = this.get(t), trigger(t.target, t.type === "touchend" ? "change" : "input"));
+    e.enabled && is$1.event(t) && !t.target.disabled && (t.preventDefault(), t.target.value = this.get(t), trigger(t.target, "touchend" === t.type ? "change" : "input"));
   } }], [{ key: "setup", value: function(t) {
-    var i = 1 < arguments.length && arguments[1] !== void 0 ? arguments[1] : {}, s = null;
+    var i = 1 < arguments.length && void 0 !== arguments[1] ? arguments[1] : {}, s = null;
     if (is$1.empty(t) || is$1.string(t) ? s = Array.from(document.querySelectorAll(is$1.string(t) ? t : 'input[type="range"]')) : is$1.element(t) ? s = [t] : is$1.nodeList(t) ? s = Array.from(t) : is$1.array(t) && (s = t.filter(is$1.element)), is$1.empty(s))
       return null;
     var n = _objectSpread2({}, defaults$1, {}, i);
@@ -585,7 +593,7 @@ var RangeTouch = function() {
     return "ontouchstart" in document.documentElement;
   } }]), e;
 }();
-const getConstructor = (e) => e != null ? e.constructor : null, instanceOf = (e, t) => Boolean(e && t && e instanceof t), isNullOrUndefined = (e) => e == null, isObject = (e) => getConstructor(e) === Object, isNumber = (e) => getConstructor(e) === Number && !Number.isNaN(e), isString = (e) => getConstructor(e) === String, isBoolean = (e) => getConstructor(e) === Boolean, isFunction = (e) => getConstructor(e) === Function, isArray = (e) => Array.isArray(e), isWeakMap = (e) => instanceOf(e, WeakMap), isNodeList = (e) => instanceOf(e, NodeList), isTextNode = (e) => getConstructor(e) === Text, isEvent = (e) => instanceOf(e, Event), isKeyboardEvent = (e) => instanceOf(e, KeyboardEvent), isCue = (e) => instanceOf(e, window.TextTrackCue) || instanceOf(e, window.VTTCue), isTrack = (e) => instanceOf(e, TextTrack) || !isNullOrUndefined(e) && isString(e.kind), isPromise = (e) => instanceOf(e, Promise) && isFunction(e.then), isElement = (e) => e !== null && typeof e == "object" && e.nodeType === 1 && typeof e.style == "object" && typeof e.ownerDocument == "object", isEmpty = (e) => isNullOrUndefined(e) || (isString(e) || isArray(e) || isNodeList(e)) && !e.length || isObject(e) && !Object.keys(e).length, isUrl = (e) => {
+const getConstructor = (e) => null != e ? e.constructor : null, instanceOf = (e, t) => Boolean(e && t && e instanceof t), isNullOrUndefined = (e) => null == e, isObject = (e) => getConstructor(e) === Object, isNumber = (e) => getConstructor(e) === Number && !Number.isNaN(e), isString = (e) => getConstructor(e) === String, isBoolean = (e) => getConstructor(e) === Boolean, isFunction = (e) => "function" == typeof e, isArray = (e) => Array.isArray(e), isWeakMap = (e) => instanceOf(e, WeakMap), isNodeList = (e) => instanceOf(e, NodeList), isTextNode = (e) => getConstructor(e) === Text, isEvent = (e) => instanceOf(e, Event), isKeyboardEvent = (e) => instanceOf(e, KeyboardEvent), isCue = (e) => instanceOf(e, window.TextTrackCue) || instanceOf(e, window.VTTCue), isTrack = (e) => instanceOf(e, TextTrack) || !isNullOrUndefined(e) && isString(e.kind), isPromise = (e) => instanceOf(e, Promise) && isFunction(e.then), isElement = (e) => null !== e && "object" == typeof e && 1 === e.nodeType && "object" == typeof e.style && "object" == typeof e.ownerDocument, isEmpty = (e) => isNullOrUndefined(e) || (isString(e) || isArray(e) || isNodeList(e)) && !e.length || isObject(e) && !Object.keys(e).length, isUrl = (e) => {
   if (instanceOf(e, window.URL))
     return true;
   if (!isString(e))
@@ -600,7 +608,7 @@ const getConstructor = (e) => e != null ? e.constructor : null, instanceOf = (e,
 };
 var is = { nullOrUndefined: isNullOrUndefined, object: isObject, number: isNumber, string: isString, boolean: isBoolean, function: isFunction, array: isArray, weakMap: isWeakMap, nodeList: isNodeList, element: isElement, textNode: isTextNode, event: isEvent, keyboardEvent: isKeyboardEvent, cue: isCue, track: isTrack, promise: isPromise, url: isUrl, empty: isEmpty };
 const transitionEndEvent = (() => {
-  const e = document.createElement("span"), t = { WebkitTransition: "webkitTransitionEnd", MozTransition: "transitionend", OTransition: "oTransitionEnd otransitionend", transition: "transitionend" }, i = Object.keys(t).find((t2) => e.style[t2] !== void 0);
+  const e = document.createElement("span"), t = { WebkitTransition: "webkitTransitionEnd", MozTransition: "transitionend", OTransition: "oTransitionEnd otransitionend", transition: "transitionend" }, i = Object.keys(t).find((t2) => void 0 !== e.style[t2]);
   return !!is.string(i) && t[i];
 })();
 function repaint(e, t) {
@@ -611,7 +619,8 @@ function repaint(e, t) {
     }
   }, t);
 }
-const browser = { isIE: Boolean(window.document.documentMode), isEdge: window.navigator.userAgent.includes("Edge"), isWebkit: "WebkitAppearance" in document.documentElement.style && !/Edge/.test(navigator.userAgent), isIPhone: /(iPhone|iPod)/gi.test(navigator.platform), isIos: navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1 || /(iPad|iPhone|iPod)/gi.test(navigator.platform) };
+const isIE = Boolean(window.document.documentMode), isEdge = /Edge/g.test(navigator.userAgent), isWebKit = "WebkitAppearance" in document.documentElement.style && !/Edge/g.test(navigator.userAgent), isIPhone = /iPhone|iPod/gi.test(navigator.userAgent) && navigator.maxTouchPoints > 1, isIPadOS = "MacIntel" === navigator.platform && navigator.maxTouchPoints > 1, isIos = /iPad|iPhone|iPod/gi.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
+var browser = { isIE, isEdge, isWebKit, isIPhone, isIPadOS, isIos };
 function cloneDeep(e) {
   return JSON.parse(JSON.stringify(e));
 }
@@ -688,7 +697,7 @@ function toggleClass(e, t, i) {
     return Array.from(e).map((e2) => toggleClass(e2, t, i));
   if (is.element(e)) {
     let s = "toggle";
-    return i !== void 0 && (s = i ? "add" : "remove"), e.classList[s](t), e.classList.contains(t);
+    return void 0 !== i && (s = i ? "add" : "remove"), e.classList[s](t), e.classList.contains(t);
   }
   return false;
 }
@@ -709,7 +718,7 @@ function closest$1(e, t) {
       if (matches.matches(e2, t))
         return e2;
       e2 = e2.parentElement || e2.parentNode;
-    } while (e2 !== null && e2.nodeType === 1);
+    } while (null !== e2 && 1 === e2.nodeType);
     return null;
   }).call(e, t);
 }
@@ -720,11 +729,11 @@ function getElement(e) {
   return this.elements.container.querySelector(e);
 }
 function setFocus(e = null, t = false) {
-  is.element(e) && (e.focus({ preventScroll: true }), t && toggleClass(e, this.config.classNames.tabFocus));
+  is.element(e) && e.focus({ preventScroll: true, focusVisible: t });
 }
-const defaultCodecs = { "audio/ogg": "vorbis", "audio/wav": "1", "video/webm": "vp8, vorbis", "video/mp4": "avc1.42E01E, mp4a.40.2", "video/ogg": "theora" }, support = { audio: "canPlayType" in document.createElement("audio"), video: "canPlayType" in document.createElement("video"), check(e, t, i) {
-  const s = browser.isIPhone && i && support.playsinline, n = support[e] || t !== "html5";
-  return { api: n, ui: n && support.rangeInput && (e !== "video" || !browser.isIPhone || s) };
+const defaultCodecs = { "audio/ogg": "vorbis", "audio/wav": "1", "video/webm": "vp8, vorbis", "video/mp4": "avc1.42E01E, mp4a.40.2", "video/ogg": "theora" }, support = { audio: "canPlayType" in document.createElement("audio"), video: "canPlayType" in document.createElement("video"), check(e, t) {
+  const i = support[e] || "html5" !== t;
+  return { api: i, ui: i && support.rangeInput };
 }, pip: !(browser.isIPhone || !is.function(createElement("video").webkitSetPresentationMode) && (!document.pictureInPictureEnabled || createElement("video").disablePictureInPicture)), airplay: is.function(window.WebKitPlaybackTargetAvailabilityEvent), playsinline: "playsInline" in document.createElement("video"), mime(e) {
   if (is.empty(e))
     return false;
@@ -740,8 +749,8 @@ const defaultCodecs = { "audio/ogg": "vorbis", "audio/wav": "1", "video/webm": "
   }
 }, textTracks: "textTracks" in document.createElement("video"), rangeInput: (() => {
   const e = document.createElement("input");
-  return e.type = "range", e.type === "range";
-})(), touch: "ontouchstart" in document.documentElement, transitions: transitionEndEvent !== false, reducedMotion: "matchMedia" in window && window.matchMedia("(prefers-reduced-motion)").matches }, supportsPassiveListeners = (() => {
+  return e.type = "range", "range" === e.type;
+})(), touch: "ontouchstart" in document.documentElement, transitions: false !== transitionEndEvent, reducedMotion: "matchMedia" in window && window.matchMedia("(prefers-reduced-motion)").matches }, supportsPassiveListeners = (() => {
   let e = false;
   try {
     const t = Object.defineProperty({}, "passive", { get: () => (e = true, null) });
@@ -774,7 +783,7 @@ function once(e, t = "", i, s = true, n = false) {
 function triggerEvent(e, t = "", i = false, s = {}) {
   if (!is.element(e) || is.empty(t))
     return;
-  const n = new CustomEvent(t, { bubbles: i, detail: __spreadProps(__spreadValues({}, s), { plyr: this }) });
+  const n = new CustomEvent(t, { bubbles: i, detail: { ...s, plyr: this } });
   e.dispatchEvent(n);
 }
 function unbindListeners() {
@@ -800,7 +809,7 @@ function closest(e, t) {
 function supportsCSS(e) {
   return !(!window || !window.CSS) && window.CSS.supports(e);
 }
-const standardRatios = [[1, 1], [4, 3], [3, 4], [5, 4], [4, 5], [3, 2], [2, 3], [16, 10], [10, 16], [16, 9], [9, 16], [21, 9], [9, 21], [32, 9], [9, 32]].reduce((e, [t, i]) => __spreadProps(__spreadValues({}, e), { [t / i]: [t, i] }), {});
+const standardRatios = [[1, 1], [4, 3], [3, 4], [5, 4], [4, 5], [3, 2], [2, 3], [16, 10], [10, 16], [16, 9], [9, 16], [21, 9], [9, 21], [32, 9], [9, 32]].reduce((e, [t, i]) => ({ ...e, [t / i]: [t, i] }), {});
 function validateAspectRatio(e) {
   if (!(is.array(e) || is.string(e) && e.includes(":")))
     return false;
@@ -809,13 +818,13 @@ function validateAspectRatio(e) {
 function reduceAspectRatio(e) {
   if (!is.array(e) || !e.every(is.number))
     return null;
-  const [t, i] = e, s = (e2, t2) => t2 === 0 ? e2 : s(t2, e2 % t2), n = s(t, i);
+  const [t, i] = e, s = (e2, t2) => 0 === t2 ? e2 : s(t2, e2 % t2), n = s(t, i);
   return [t / n, i / n];
 }
 function getAspectRatio(e) {
   const t = (e2) => validateAspectRatio(e2) ? e2.split(":").map(Number) : null;
   let i = t(e);
-  if (i === null && (i = t(this.config.ratio)), i === null && !is.empty(this.embed) && is.array(this.embed.ratio) && ({ ratio: i } = this.embed), i === null && this.isHTML5) {
+  if (null === i && (i = t(this.config.ratio)), null === i && !is.empty(this.embed) && is.array(this.embed.ratio) && ({ ratio: i } = this.embed), null === i && this.isHTML5) {
     const { videoWidth: e2, videoHeight: t2 } = this.media;
     i = [e2, t2];
   }
@@ -867,7 +876,7 @@ const html5 = { getSources() {
         if (!i)
           return;
         const { currentTime: s, paused: n, preload: r, readyState: a, playbackRate: o } = e.media;
-        e.media.src = i.getAttribute("src"), (r !== "none" || a) && (e.once("loadedmetadata", () => {
+        e.media.src = i.getAttribute("src"), ("none" !== r || a) && (e.once("loadedmetadata", () => {
           e.speed = o, e.currentTime = s, n || silencePromise(e.play());
         }), e.media.load());
       }
@@ -884,7 +893,7 @@ function format(e, ...t) {
   return is.empty(e) ? e : e.toString().replace(/{(\d+)}/g, (e2, i) => t[i].toString());
 }
 function getPercentage(e, t) {
-  return e === 0 || t === 0 || Number.isNaN(e) || Number.isNaN(t) ? 0 : (e / t * 100).toFixed(2);
+  return 0 === e || 0 === t || Number.isNaN(e) || Number.isNaN(t) ? 0 : (e / t * 100).toFixed(2);
 }
 const replaceAll = (e = "", t = "", i = "") => e.replace(new RegExp(t.toString().replace(/([.*+?^=!:${}()|[\]/\\])/g, "\\$1"), "g"), i.toString()), toTitleCase = (e = "") => e.toString().replace(/\w\S*/g, (e2) => e2.charAt(0).toUpperCase() + e2.slice(1).toLowerCase());
 function toPascalCase(e = "") {
@@ -955,7 +964,7 @@ function fetch(e, t = "text") {
       if (!("withCredentials" in s2))
         return;
       s2.addEventListener("load", () => {
-        if (t === "text")
+        if ("text" === t)
           try {
             i(JSON.parse(s2.responseText));
           } catch (e2) {
@@ -974,43 +983,41 @@ function fetch(e, t = "text") {
 function loadSprite(e, t) {
   if (!is.string(e))
     return;
-  const i = is.string(t);
-  let s = false;
-  const n = () => document.getElementById(t) !== null, r = (e2, t2) => {
-    e2.innerHTML = t2, i && n() || document.body.insertAdjacentElement("afterbegin", e2);
+  const i = "cache", s = is.string(t);
+  let n = false;
+  const r = () => null !== document.getElementById(t), a = (e2, t2) => {
+    e2.innerHTML = t2, s && r() || document.body.insertAdjacentElement("afterbegin", e2);
   };
-  if (!i || !n()) {
-    const n2 = Storage.supported, a = document.createElement("div");
-    if (a.setAttribute("hidden", ""), i && a.setAttribute("id", t), n2) {
-      const e2 = window.localStorage.getItem(`cache-${t}`);
-      if (s = e2 !== null, s) {
+  if (!s || !r()) {
+    const r2 = Storage.supported, o = document.createElement("div");
+    if (o.setAttribute("hidden", ""), s && o.setAttribute("id", t), r2) {
+      const e2 = window.localStorage.getItem(`${i}-${t}`);
+      if (n = null !== e2, n) {
         const t2 = JSON.parse(e2);
-        r(a, t2.content);
+        a(o, t2.content);
       }
     }
     fetch(e).then((e2) => {
       if (!is.empty(e2)) {
-        if (n2)
+        if (r2)
           try {
-            window.localStorage.setItem(`cache-${t}`, JSON.stringify({ content: e2 }));
+            window.localStorage.setItem(`${i}-${t}`, JSON.stringify({ content: e2 }));
           } catch (e3) {
           }
-        r(a, e2);
+        a(o, e2);
       }
     }).catch(() => {
     });
   }
 }
-const getHours = (e) => Math.trunc(e / 60 / 60 % 60, 10), getSeconds = (e) => Math.trunc(e % 60, 10);
+const getHours = (e) => Math.trunc(e / 60 / 60 % 60, 10), getMinutes = (e) => Math.trunc(e / 60 % 60, 10), getSeconds = (e) => Math.trunc(e % 60, 10);
 function formatTime(e = 0, t = false, i = false) {
   if (!is.number(e))
     return formatTime(void 0, t, i);
   const s = (e2) => `0${e2}`.slice(-2);
   let n = getHours(e);
-  const r = (a = e, Math.trunc(a / 60 % 60, 10));
-  var a;
-  const o = getSeconds(e);
-  return n = t || n > 0 ? `${n}:` : "", `${i && e > 0 ? "-" : ""}${n}${s(r)}:${s(o)}`;
+  const r = getMinutes(e), a = getSeconds(e);
+  return n = t || n > 0 ? `${n}:` : "", `${i && e > 0 ? "-" : ""}${n}${s(r)}:${s(a)}`;
 }
 const controls = { getIconUrl() {
   const e = new URL(this.config.iconUrl, window.location), t = window.location.host ? window.location.host : window.top.location.host, i = e.host !== t || browser.isIE && !window.svg4everybody;
@@ -1028,7 +1035,7 @@ const controls = { getIconUrl() {
   return "href" in a && a.setAttributeNS("http://www.w3.org/1999/xlink", "href", o), a.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", o), r.appendChild(a), r;
 }, createLabel(e, t = {}) {
   const i = i18n.get(e, this.config);
-  return createElement("span", __spreadProps(__spreadValues({}, t), { class: [t.class, this.config.classNames.hidden].filter(Boolean).join(" ") }), i);
+  return createElement("span", { ...t, class: [t.class, this.config.classNames.hidden].filter(Boolean).join(" ") }, i);
 }, createBadge(e) {
   if (is.empty(e))
     return null;
@@ -1040,7 +1047,7 @@ const controls = { getIconUrl() {
   const n = { element: "button", toggle: false, label: null, icon: null, labelPressed: null, iconPressed: null };
   switch (["element", "icon", "label"].forEach((e2) => {
     Object.keys(i).includes(e2) && (n[e2] = i[e2], delete i[e2]);
-  }), n.element !== "button" || Object.keys(i).includes("type") || (i.type = "button"), Object.keys(i).includes("class") ? i.class.split(" ").some((e2) => e2 === this.config.classNames.control) || extend(i, { class: `${i.class} ${this.config.classNames.control}` }) : i.class = this.config.classNames.control, e) {
+  }), "button" !== n.element || Object.keys(i).includes("type") || (i.type = "button"), Object.keys(i).includes("class") ? i.class.split(" ").some((e2) => e2 === this.config.classNames.control) || extend(i, { class: `${i.class} ${this.config.classNames.control}` }) : i.class = this.config.classNames.control, e) {
     case "play":
       n.toggle = true, n.label = "play", n.labelPressed = "pause", n.icon = "play", n.iconPressed = "pause";
       break;
@@ -1060,43 +1067,43 @@ const controls = { getIconUrl() {
       is.empty(n.label) && (n.label = s), is.empty(n.icon) && (n.icon = e);
   }
   const r = createElement(n.element);
-  return n.toggle ? (r.appendChild(controls.createIcon.call(this, n.iconPressed, { class: "icon--pressed" })), r.appendChild(controls.createIcon.call(this, n.icon, { class: "icon--not-pressed" })), r.appendChild(controls.createLabel.call(this, n.labelPressed, { class: "label--pressed" })), r.appendChild(controls.createLabel.call(this, n.label, { class: "label--not-pressed" }))) : (r.appendChild(controls.createIcon.call(this, n.icon)), r.appendChild(controls.createLabel.call(this, n.label))), extend(i, getAttributesFromSelector(this.config.selectors.buttons[s], i)), setAttributes(r, i), s === "play" ? (is.array(this.elements.buttons[s]) || (this.elements.buttons[s] = []), this.elements.buttons[s].push(r)) : this.elements.buttons[s] = r, r;
+  return n.toggle ? (r.appendChild(controls.createIcon.call(this, n.iconPressed, { class: "icon--pressed" })), r.appendChild(controls.createIcon.call(this, n.icon, { class: "icon--not-pressed" })), r.appendChild(controls.createLabel.call(this, n.labelPressed, { class: "label--pressed" })), r.appendChild(controls.createLabel.call(this, n.label, { class: "label--not-pressed" }))) : (r.appendChild(controls.createIcon.call(this, n.icon)), r.appendChild(controls.createLabel.call(this, n.label))), extend(i, getAttributesFromSelector(this.config.selectors.buttons[s], i)), setAttributes(r, i), "play" === s ? (is.array(this.elements.buttons[s]) || (this.elements.buttons[s] = []), this.elements.buttons[s].push(r)) : this.elements.buttons[s] = r, r;
 }, createRange(e, t) {
   const i = createElement("input", extend(getAttributesFromSelector(this.config.selectors.inputs[e]), { type: "range", min: 0, max: 100, step: 0.01, value: 0, autocomplete: "off", role: "slider", "aria-label": i18n.get(e, this.config), "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": 0 }, t));
   return this.elements.inputs[e] = i, controls.updateRangeFill.call(this, i), RangeTouch.setup(i), i;
 }, createProgress(e, t) {
   const i = createElement("progress", extend(getAttributesFromSelector(this.config.selectors.display[e]), { min: 0, max: 100, value: 0, role: "progressbar", "aria-hidden": true }, t));
-  if (e !== "volume") {
+  if ("volume" !== e) {
     i.appendChild(createElement("span", null, "0"));
     const t2 = { played: "played", buffer: "buffered" }[e], s = t2 ? i18n.get(t2, this.config) : "";
     i.innerText = `% ${s.toLowerCase()}`;
   }
   return this.elements.display[e] = i, i;
 }, createTime(e, t) {
-  const i = getAttributesFromSelector(this.config.selectors.display[e], t), s = createElement("div", extend(i, { class: `${i.class ? i.class : ""} ${this.config.classNames.display.time} `.trim(), "aria-label": i18n.get(e, this.config) }), "00:00");
+  const i = getAttributesFromSelector(this.config.selectors.display[e], t), s = createElement("div", extend(i, { class: `${i.class ? i.class : ""} ${this.config.classNames.display.time} `.trim(), "aria-label": i18n.get(e, this.config), role: "timer" }), "00:00");
   return this.elements.display[e] = s, s;
 }, bindMenuItemShortcuts(e, t) {
   on.call(this, e, "keydown keyup", (i) => {
-    if (!["Space", "ArrowUp", "ArrowDown", "ArrowRight"].includes(i.key))
+    if (![" ", "ArrowUp", "ArrowDown", "ArrowRight"].includes(i.key))
       return;
-    if (i.preventDefault(), i.stopPropagation(), i.type === "keydown")
+    if (i.preventDefault(), i.stopPropagation(), "keydown" === i.type)
       return;
     const s = matches(e, '[role="menuitemradio"]');
-    if (!s && ["Space", "ArrowRight"].includes(i.key))
+    if (!s && [" ", "ArrowRight"].includes(i.key))
       controls.showMenuPanel.call(this, t, true);
     else {
       let t2;
-      i.key !== "Space" && (i.key === "ArrowDown" || s && i.key === "ArrowRight" ? (t2 = e.nextElementSibling, is.element(t2) || (t2 = e.parentNode.firstElementChild)) : (t2 = e.previousElementSibling, is.element(t2) || (t2 = e.parentNode.lastElementChild)), setFocus.call(this, t2, true));
+      " " !== i.key && ("ArrowDown" === i.key || s && "ArrowRight" === i.key ? (t2 = e.nextElementSibling, is.element(t2) || (t2 = e.parentNode.firstElementChild)) : (t2 = e.previousElementSibling, is.element(t2) || (t2 = e.parentNode.lastElementChild)), setFocus.call(this, t2, true));
     }
   }, false), on.call(this, e, "keyup", (e2) => {
-    e2.key === "Return" && controls.focusFirstMenuItem.call(this, null, true);
+    "Return" === e2.key && controls.focusFirstMenuItem.call(this, null, true);
   });
 }, createMenuItem({ value: e, list: t, type: i, title: s, badge: n = null, checked: r = false }) {
   const a = getAttributesFromSelector(this.config.selectors.inputs[i]), o = createElement("button", extend(a, { type: "button", role: "menuitemradio", class: `${this.config.classNames.control} ${a.class ? a.class : ""}`.trim(), "aria-checked": r, value: e })), l = createElement("span");
-  l.innerHTML = s, is.element(n) && l.appendChild(n), o.appendChild(l), Object.defineProperty(o, "checked", { enumerable: true, get: () => o.getAttribute("aria-checked") === "true", set(e2) {
+  l.innerHTML = s, is.element(n) && l.appendChild(n), o.appendChild(l), Object.defineProperty(o, "checked", { enumerable: true, get: () => "true" === o.getAttribute("aria-checked"), set(e2) {
     e2 && Array.from(o.parentNode.children).filter((e3) => matches(e3, '[role="menuitemradio"]')).forEach((e3) => e3.setAttribute("aria-checked", "false")), o.setAttribute("aria-checked", e2 ? "true" : "false");
   } }), this.listeners.bind(o, "click keyup", (t2) => {
-    if (!is.keyboardEvent(t2) || t2.key === "Space") {
+    if (!is.keyboardEvent(t2) || " " === t2.key) {
       switch (t2.preventDefault(), t2.stopPropagation(), o.checked = true, i) {
         case "language":
           this.currentTrack = Number(e);
@@ -1117,7 +1124,7 @@ const controls = { getIconUrl() {
 }, updateTimeDisplay(e = null, t = 0, i = false) {
   is.element(e) && is.number(t) && (e.innerText = controls.formatTime(t, i));
 }, updateVolume() {
-  this.supported.ui && (is.element(this.elements.inputs.volume) && controls.setRange.call(this, this.elements.inputs.volume, this.muted ? 0 : this.volume), is.element(this.elements.buttons.mute) && (this.elements.buttons.mute.pressed = this.muted || this.volume === 0));
+  this.supported.ui && (is.element(this.elements.inputs.volume) && controls.setRange.call(this, this.elements.inputs.volume, this.muted ? 0 : this.volume), is.element(this.elements.buttons.mute) && (this.elements.buttons.mute.pressed = this.muted || 0 === this.volume));
 }, setRange(e, t = 0) {
   is.element(e) && (e.value = t, controls.updateRangeFill.call(this, e));
 }, updateProgress(e) {
@@ -1137,7 +1144,7 @@ const controls = { getIconUrl() {
       case "timeupdate":
       case "seeking":
       case "seeked":
-        t = getPercentage(this.currentTime, this.duration), e.type === "timeupdate" && controls.setRange.call(this, this.elements.inputs.seek, t);
+        t = getPercentage(this.currentTime, this.duration), "timeupdate" === e.type && controls.setRange.call(this, this.elements.inputs.seek, t);
         break;
       case "playing":
       case "progress":
@@ -1145,7 +1152,7 @@ const controls = { getIconUrl() {
     }
 }, updateRangeFill(e) {
   const t = is.event(e) ? e.target : e;
-  if (is.element(t) && t.getAttribute("type") === "range") {
+  if (is.element(t) && "range" === t.getAttribute("type")) {
     if (matches(t, this.config.selectors.inputs.seek)) {
       t.setAttribute("aria-valuenow", this.currentTime);
       const e2 = controls.formatTime(this.currentTime), i = controls.formatTime(this.duration), s = i18n.get("seekLabel", this.config);
@@ -1155,11 +1162,11 @@ const controls = { getIconUrl() {
       t.setAttribute("aria-valuenow", e2), t.setAttribute("aria-valuetext", `${e2.toFixed(1)}%`);
     } else
       t.setAttribute("aria-valuenow", t.value);
-    browser.isWebkit && t.style.setProperty("--value", t.value / t.max * 100 + "%");
+    (browser.isWebKit || browser.isIPadOS) && t.style.setProperty("--value", t.value / t.max * 100 + "%");
   }
 }, updateSeekTooltip(e) {
   var t, i;
-  if (!this.config.tooltips.seek || !is.element(this.elements.inputs.seek) || !is.element(this.elements.display.seekTooltip) || this.duration === 0)
+  if (!this.config.tooltips.seek || !is.element(this.elements.inputs.seek) || !is.element(this.elements.display.seekTooltip) || 0 === this.duration)
     return;
   const s = this.elements.display.seekTooltip, n = `${this.config.classNames.tooltip}--visible`, r = (e2) => toggleClass(s, n, e2);
   if (this.touch)
@@ -1176,11 +1183,11 @@ const controls = { getIconUrl() {
   a < 0 ? a = 0 : a > 100 && (a = 100);
   const l = this.duration / 100 * a;
   s.innerText = controls.formatTime(l);
-  const c = (t = this.config.markers) === null || t === void 0 || (i = t.points) === null || i === void 0 ? void 0 : i.find(({ time: e2 }) => e2 === Math.round(l));
-  c && s.insertAdjacentHTML("afterbegin", `${c.label}<br>`), s.style.left = `${a}%`, is.event(e) && ["mouseenter", "mouseleave"].includes(e.type) && r(e.type === "mouseenter");
+  const c = null === (t = this.config.markers) || void 0 === t || null === (i = t.points) || void 0 === i ? void 0 : i.find(({ time: e2 }) => e2 === Math.round(l));
+  c && s.insertAdjacentHTML("afterbegin", `${c.label}<br>`), s.style.left = `${a}%`, is.event(e) && ["mouseenter", "mouseleave"].includes(e.type) && r("mouseenter" === e.type);
 }, timeUpdate(e) {
   const t = !is.element(this.elements.display.duration) && this.config.invertTime;
-  controls.updateTimeDisplay.call(this, this.elements.display.currentTime, t ? this.duration - this.currentTime : this.currentTime, t), e && e.type === "timeupdate" && this.media.seeking || controls.updateProgress.call(this, e);
+  controls.updateTimeDisplay.call(this, this.elements.display.currentTime, t ? this.duration - this.currentTime : this.currentTime, t), e && "timeupdate" === e.type && this.media.seeking || controls.updateProgress.call(this, e);
 }, durationUpdate() {
   if (!this.supported.ui || !this.config.invertTime && this.currentTime)
     return;
@@ -1194,7 +1201,7 @@ const controls = { getIconUrl() {
 }, updateSetting(e, t, i) {
   const s = this.elements.settings.panels[e];
   let n = null, r = t;
-  if (e === "captions")
+  if ("captions" === e)
     n = this.currentTrack;
   else {
     if (n = is.empty(i) ? this[e] : i, is.empty(n) && (n = this.config[e].default), !is.empty(this.options[e]) && !this.options[e].includes(n))
@@ -1210,7 +1217,7 @@ const controls = { getIconUrl() {
 }, getLabel(e, t) {
   switch (e) {
     case "speed":
-      return t === 1 ? i18n.get("normal", this.config) : `${t}&times;`;
+      return 1 === t ? i18n.get("normal", this.config) : `${t}&times;`;
     case "quality":
       if (is.number(t)) {
         const e2 = i18n.get(`qualityLabel.${t}`, this.config);
@@ -1275,7 +1282,7 @@ const controls = { getIconUrl() {
   let n = s;
   if (is.boolean(e))
     n = e;
-  else if (is.keyboardEvent(e) && e.key === "Escape")
+  else if (is.keyboardEvent(e) && "Escape" === e.key)
     n = false;
   else if (is.event(e)) {
     const s2 = is.function(e.composedPath) ? e.composedPath()[0] : e.target, r = t.contains(s2);
@@ -1311,7 +1318,7 @@ const controls = { getIconUrl() {
   this.elements.controls = c;
   const u = { class: "plyr__controls__item" };
   return dedupe(is.array(this.config.controls) ? this.config.controls : []).forEach((a2) => {
-    if (a2 === "restart" && c.appendChild(i.call(this, "restart", u)), a2 === "rewind" && c.appendChild(i.call(this, "rewind", u)), a2 === "play" && c.appendChild(i.call(this, "play", u)), a2 === "fast-forward" && c.appendChild(i.call(this, "fast-forward", u)), a2 === "progress") {
+    if ("restart" === a2 && c.appendChild(i.call(this, "restart", u)), "rewind" === a2 && c.appendChild(i.call(this, "rewind", u)), "play" === a2 && c.appendChild(i.call(this, "play", u)), "fast-forward" === a2 && c.appendChild(i.call(this, "fast-forward", u)), "progress" === a2) {
       const t2 = createElement("div", { class: `${u.class} plyr__progress__container` }), i2 = createElement("div", getAttributesFromSelector(this.config.selectors.progress));
       if (i2.appendChild(n.call(this, "seek", { id: `plyr-seek-${e.id}` })), i2.appendChild(s.call(this, "buffer")), this.config.tooltips.seek) {
         const e2 = createElement("span", { class: this.config.classNames.tooltip }, "00:00");
@@ -1319,14 +1326,14 @@ const controls = { getIconUrl() {
       }
       this.elements.progress = i2, t2.appendChild(this.elements.progress), c.appendChild(t2);
     }
-    if (a2 === "current-time" && c.appendChild(r.call(this, "currentTime", u)), a2 === "duration" && c.appendChild(r.call(this, "duration", u)), a2 === "mute" || a2 === "volume") {
+    if ("current-time" === a2 && c.appendChild(r.call(this, "currentTime", u)), "duration" === a2 && c.appendChild(r.call(this, "duration", u)), "mute" === a2 || "volume" === a2) {
       let { volume: t2 } = this.elements;
-      if (is.element(t2) && c.contains(t2) || (t2 = createElement("div", extend({}, u, { class: `${u.class} plyr__volume`.trim() })), this.elements.volume = t2, c.appendChild(t2)), a2 === "mute" && t2.appendChild(i.call(this, "mute")), a2 === "volume" && !browser.isIos) {
+      if (is.element(t2) && c.contains(t2) || (t2 = createElement("div", extend({}, u, { class: `${u.class} plyr__volume`.trim() })), this.elements.volume = t2, c.appendChild(t2)), "mute" === a2 && t2.appendChild(i.call(this, "mute")), "volume" === a2 && !browser.isIos && !browser.isIPadOS) {
         const i2 = { max: 1, step: 0.05, value: this.config.volume };
         t2.appendChild(n.call(this, "volume", extend(i2, { id: `plyr-volume-${e.id}` })));
       }
     }
-    if (a2 === "captions" && c.appendChild(i.call(this, "captions", u)), a2 === "settings" && !is.empty(this.config.settings)) {
+    if ("captions" === a2 && c.appendChild(i.call(this, "captions", u)), "settings" === a2 && !is.empty(this.config.settings)) {
       const s2 = createElement("div", extend({}, u, { class: `${u.class} plyr__menu`.trim(), hidden: "" }));
       s2.appendChild(i.call(this, "settings", { "aria-haspopup": true, "aria-controls": `plyr-settings-${e.id}`, "aria-expanded": false }));
       const n2 = createElement("div", { class: "plyr__menu__container", id: `plyr-settings-${e.id}`, hidden: "" }), r2 = createElement("div"), a3 = createElement("div", { id: `plyr-settings-${e.id}-home` }), o2 = createElement("div", { role: "menu" });
@@ -1339,19 +1346,19 @@ const controls = { getIconUrl() {
         a4.innerHTML = e[i2], n3.appendChild(a4), s3.appendChild(n3), o2.appendChild(s3);
         const c2 = createElement("div", { id: `plyr-settings-${e.id}-${i2}`, hidden: "" }), u2 = createElement("button", { type: "button", class: `${this.config.classNames.control} ${this.config.classNames.control}--back` });
         u2.appendChild(createElement("span", { "aria-hidden": true }, i18n.get(i2, this.config))), u2.appendChild(createElement("span", { class: this.config.classNames.hidden }, i18n.get("menuBack", this.config))), on.call(this, c2, "keydown", (e2) => {
-          e2.key === "ArrowLeft" && (e2.preventDefault(), e2.stopPropagation(), l.call(this, "home", true));
+          "ArrowLeft" === e2.key && (e2.preventDefault(), e2.stopPropagation(), l.call(this, "home", true));
         }, false), on.call(this, u2, "click", () => {
           l.call(this, "home", false);
         }), c2.appendChild(u2), c2.appendChild(createElement("div", { role: "menu" })), r2.appendChild(c2), this.elements.settings.buttons[i2] = s3, this.elements.settings.panels[i2] = c2;
       }), n2.appendChild(r2), s2.appendChild(n2), c.appendChild(s2), this.elements.settings.popup = n2, this.elements.settings.menu = s2;
     }
-    if (a2 === "pip" && support.pip && c.appendChild(i.call(this, "pip", u)), a2 === "airplay" && support.airplay && c.appendChild(i.call(this, "airplay", u)), a2 === "download") {
+    if ("pip" === a2 && support.pip && c.appendChild(i.call(this, "pip", u)), "airplay" === a2 && support.airplay && c.appendChild(i.call(this, "airplay", u)), "download" === a2) {
       const e2 = extend({}, u, { element: "a", href: this.download, target: "_blank" });
       this.isHTML5 && (e2.download = "");
       const { download: t2 } = this.config.urls;
       !is.url(t2) && this.isEmbed && extend(e2, { icon: `logo-${this.provider}`, label: this.provider }), c.appendChild(i.call(this, "download", e2));
     }
-    a2 === "fullscreen" && c.appendChild(i.call(this, "fullscreen", u));
+    "fullscreen" === a2 && c.appendChild(i.call(this, "fullscreen", u));
   }), this.isHTML5 && a.call(this, html5.getQualityOptions.call(this)), o.call(this), c;
 }, inject() {
   if (this.config.loadSprite) {
@@ -1374,8 +1381,8 @@ const controls = { getIconUrl() {
   if (s[is.element(e) ? "insertAdjacentElement" : "insertAdjacentHTML"]("afterbegin", e), is.element(this.elements.controls) || controls.findElements.call(this), !is.empty(this.elements.buttons)) {
     const e2 = (e3) => {
       const t2 = this.config.classNames.controlPressed;
-      Object.defineProperty(e3, "pressed", { enumerable: true, get: () => hasClass(e3, t2), set(i2 = false) {
-        toggleClass(e3, t2, i2);
+      e3.setAttribute("aria-pressed", "false"), Object.defineProperty(e3, "pressed", { configurable: true, enumerable: true, get: () => hasClass(e3, t2), set(i2 = false) {
+        toggleClass(e3, t2, i2), e3.setAttribute("aria-pressed", i2 ? "true" : "false");
       } });
     };
     Object.values(this.elements.buttons).filter(Boolean).forEach((t2) => {
@@ -1397,8 +1404,8 @@ const controls = { getIconUrl() {
   var e, t;
   if (!this.duration || this.elements.markers)
     return;
-  const i = (e = this.config.markers) === null || e === void 0 || (t = e.points) === null || t === void 0 ? void 0 : t.filter(({ time: e2 }) => e2 > 0 && e2 < this.duration);
-  if (i == null || !i.length)
+  const i = null === (e = this.config.markers) || void 0 === e || null === (t = e.points) || void 0 === t ? void 0 : t.filter(({ time: e2 }) => e2 > 0 && e2 < this.duration);
+  if (null == i || !i.length)
     return;
   const s = document.createDocumentFragment(), n = document.createDocumentFragment();
   let r = null;
@@ -1437,11 +1444,11 @@ const captions = { setup() {
     return;
   if (!this.isVideo || this.isYouTube || this.isHTML5 && !support.textTracks)
     return void (is.array(this.config.controls) && this.config.controls.includes("settings") && this.config.settings.includes("captions") && controls.setCaptionsMenu.call(this));
-  if (is.element(this.elements.captions) || (this.elements.captions = createElement("div", getAttributesFromSelector(this.config.selectors.captions)), insertAfter(this.elements.captions, this.elements.wrapper)), browser.isIE && window.URL) {
+  if (is.element(this.elements.captions) || (this.elements.captions = createElement("div", getAttributesFromSelector(this.config.selectors.captions)), this.elements.captions.setAttribute("dir", "auto"), insertAfter(this.elements.captions, this.elements.wrapper)), browser.isIE && window.URL) {
     const e2 = this.media.querySelectorAll("track");
     Array.from(e2).forEach((e3) => {
       const t2 = e3.getAttribute("src"), i2 = parseUrl(t2);
-      i2 !== null && i2.hostname !== window.location.href.hostname && ["http:", "https:"].includes(i2.protocol) && fetch(t2, "blob").then((t3) => {
+      null !== i2 && i2.hostname !== window.location.href.hostname && ["http:", "https:"].includes(i2.protocol) && fetch(t2, "blob").then((t3) => {
         e3.setAttribute("src", window.URL.createObjectURL(t3));
       }).catch(() => {
         removeElement(e3);
@@ -1450,7 +1457,7 @@ const captions = { setup() {
   }
   const e = dedupe((navigator.languages || [navigator.language || navigator.userLanguage || "en"]).map((e2) => e2.split("-")[0]));
   let t = (this.storage.get("language") || this.config.captions.language || "auto").toLowerCase();
-  t === "auto" && ([t] = e);
+  "auto" === t && ([t] = e);
   let i = this.storage.get("captions");
   if (is.boolean(i) || ({ active: i } = this.config.captions), Object.assign(this.captions, { toggled: false, active: i, language: t, languages: e }), this.isHTML5) {
     const e2 = this.config.captions.update ? "addtrack removetrack" : "removetrack";
@@ -1460,7 +1467,7 @@ const captions = { setup() {
 }, update() {
   const e = captions.getTracks.call(this, true), { active: t, language: i, meta: s, currentTrackNode: n } = this.captions, r = Boolean(e.find((e2) => e2.language === i));
   this.isHTML5 && this.isVideo && e.filter((e2) => !s.get(e2)).forEach((e2) => {
-    this.debug.log("Track added", e2), s.set(e2, { default: e2.mode === "showing" }), e2.mode === "showing" && (e2.mode = "hidden"), on.call(this, e2, "cuechange", () => captions.updateCues.call(this));
+    this.debug.log("Track added", e2), s.set(e2, { default: "showing" === e2.mode }), "showing" === e2.mode && (e2.mode = "hidden"), on.call(this, e2, "cuechange", () => captions.updateCues.call(this));
   }), (r && this.language !== i || !e.includes(n)) && (captions.setLanguage.call(this, i), captions.toggle.call(this, t && r)), this.elements && toggleClass(this.elements.container, this.config.classNames.captions.enabled, !is.empty(e)), is.array(this.config.controls) && this.config.controls.includes("settings") && this.config.settings.includes("captions") && controls.setCaptionsMenu.call(this);
 }, toggle(e, t = true) {
   if (!this.supported.ui)
@@ -1478,7 +1485,7 @@ const captions = { setup() {
   });
 }, set(e, t = true) {
   const i = captions.getTracks.call(this);
-  if (e !== -1)
+  if (-1 !== e)
     if (is.number(e))
       if (e in i) {
         if (this.captions.currentTrack !== e) {
@@ -1529,7 +1536,7 @@ const captions = { setup() {
     const e2 = createElement("span", getAttributesFromSelector(this.config.selectors.caption));
     e2.innerHTML = i, this.elements.captions.appendChild(e2), triggerEvent.call(this, this.media, "cuechange");
   }
-} }, defaults = { enabled: true, title: "", debug: false, autoplay: false, autopause: true, playsinline: true, seekTime: 10, volume: 1, muted: false, duration: null, displayDuration: true, invertTime: true, toggleInvert: true, ratio: null, clickToPlay: true, hideControls: true, resetOnEnd: false, disableContextMenu: true, loadSprite: true, iconPrefix: "plyr", iconUrl: "https://cdn.plyr.io/3.7.2/plyr.svg", blankVideo: "https://cdn.plyr.io/static/blank.mp4", quality: { default: 576, options: [4320, 2880, 2160, 1440, 1080, 720, 576, 480, 360, 240], forced: false, onChange: null }, loop: { active: false }, speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 4] }, keyboard: { focused: true, global: false }, tooltips: { controls: false, seek: true }, captions: { active: false, language: "auto", update: false }, fullscreen: { enabled: true, fallback: true, iosNative: false }, storage: { enabled: true, key: "plyr" }, controls: ["play-large", "play", "progress", "current-time", "mute", "volume", "captions", "settings", "pip", "airplay", "fullscreen"], settings: ["captions", "quality", "speed"], i18n: { restart: "Restart", rewind: "Rewind {seektime}s", play: "Play", pause: "Pause", fastForward: "Forward {seektime}s", seek: "Seek", seekLabel: "{currentTime} of {duration}", played: "Played", buffered: "Buffered", currentTime: "Current time", duration: "Duration", volume: "Volume", mute: "Mute", unmute: "Unmute", enableCaptions: "Enable captions", disableCaptions: "Disable captions", download: "Download", enterFullscreen: "Enter fullscreen", exitFullscreen: "Exit fullscreen", frameTitle: "Player for {title}", captions: "Captions", settings: "Settings", pip: "PIP", menuBack: "Go back to previous menu", speed: "Speed", normal: "Normal", quality: "Quality", loop: "Loop", start: "Start", end: "End", all: "All", reset: "Reset", disabled: "Disabled", enabled: "Enabled", advertisement: "Ad", qualityBadge: { 2160: "4K", 1440: "HD", 1080: "HD", 720: "HD", 576: "SD", 480: "SD" } }, urls: { download: null, vimeo: { sdk: "https://player.vimeo.com/api/player.js", iframe: "https://player.vimeo.com/video/{0}?{1}", api: "https://vimeo.com/api/oembed.json?url={0}" }, youtube: { sdk: "https://www.youtube.com/iframe_api", api: "https://noembed.com/embed?url=https://www.youtube.com/watch?v={0}" }, googleIMA: { sdk: "https://imasdk.googleapis.com/js/sdkloader/ima3.js" } }, listeners: { seek: null, play: null, pause: null, restart: null, rewind: null, fastForward: null, mute: null, volume: null, captions: null, download: null, fullscreen: null, pip: null, airplay: null, speed: null, quality: null, loop: null, language: null }, events: ["ended", "progress", "stalled", "playing", "waiting", "canplay", "canplaythrough", "loadstart", "loadeddata", "loadedmetadata", "timeupdate", "volumechange", "play", "pause", "error", "seeking", "seeked", "emptied", "ratechange", "cuechange", "download", "enterfullscreen", "exitfullscreen", "captionsenabled", "captionsdisabled", "languagechange", "controlshidden", "controlsshown", "ready", "statechange", "qualitychange", "adsloaded", "adscontentpause", "adscontentresume", "adstarted", "adsmidpoint", "adscomplete", "adsallcomplete", "adsimpression", "adsclick"], selectors: { editable: "input, textarea, select, [contenteditable]", container: ".plyr", controls: { container: null, wrapper: ".plyr__controls" }, labels: "[data-plyr]", buttons: { play: '[data-plyr="play"]', pause: '[data-plyr="pause"]', restart: '[data-plyr="restart"]', rewind: '[data-plyr="rewind"]', fastForward: '[data-plyr="fast-forward"]', mute: '[data-plyr="mute"]', captions: '[data-plyr="captions"]', download: '[data-plyr="download"]', fullscreen: '[data-plyr="fullscreen"]', pip: '[data-plyr="pip"]', airplay: '[data-plyr="airplay"]', settings: '[data-plyr="settings"]', loop: '[data-plyr="loop"]' }, inputs: { seek: '[data-plyr="seek"]', volume: '[data-plyr="volume"]', speed: '[data-plyr="speed"]', language: '[data-plyr="language"]', quality: '[data-plyr="quality"]' }, display: { currentTime: ".plyr__time--current", duration: ".plyr__time--duration", buffer: ".plyr__progress__buffer", loop: ".plyr__progress__loop", volume: ".plyr__volume--display" }, progress: ".plyr__progress", captions: ".plyr__captions", caption: ".plyr__caption" }, classNames: { type: "plyr--{0}", provider: "plyr--{0}", video: "plyr__video-wrapper", embed: "plyr__video-embed", videoFixedRatio: "plyr__video-wrapper--fixed-ratio", embedContainer: "plyr__video-embed__container", poster: "plyr__poster", posterEnabled: "plyr__poster-enabled", ads: "plyr__ads", control: "plyr__control", controlPressed: "plyr__control--pressed", playing: "plyr--playing", paused: "plyr--paused", stopped: "plyr--stopped", loading: "plyr--loading", hover: "plyr--hover", tooltip: "plyr__tooltip", cues: "plyr__cues", marker: "plyr__progress__marker", hidden: "plyr__sr-only", hideControls: "plyr--hide-controls", isIos: "plyr--is-ios", isTouch: "plyr--is-touch", uiSupported: "plyr--full-ui", noTransition: "plyr--no-transition", display: { time: "plyr__time" }, menu: { value: "plyr__menu__value", badge: "plyr__badge", open: "plyr--menu-open" }, captions: { enabled: "plyr--captions-enabled", active: "plyr--captions-active" }, fullscreen: { enabled: "plyr--fullscreen-enabled", fallback: "plyr--fullscreen-fallback" }, pip: { supported: "plyr--pip-supported", active: "plyr--pip-active" }, airplay: { supported: "plyr--airplay-supported", active: "plyr--airplay-active" }, tabFocus: "plyr__tab-focus", previewThumbnails: { thumbContainer: "plyr__preview-thumb", thumbContainerShown: "plyr__preview-thumb--is-shown", imageContainer: "plyr__preview-thumb__image-container", timeContainer: "plyr__preview-thumb__time-container", scrubbingContainer: "plyr__preview-scrubbing", scrubbingContainerShown: "plyr__preview-scrubbing--is-shown" } }, attributes: { embed: { provider: "data-plyr-provider", id: "data-plyr-embed-id", hash: "data-plyr-embed-hash" } }, ads: { enabled: false, publisherId: "", tagUrl: "" }, previewThumbnails: { enabled: false, src: "" }, vimeo: { byline: false, portrait: false, title: false, speed: true, transparent: false, customControls: true, referrerPolicy: null, premium: false }, youtube: { rel: 0, showinfo: 0, iv_load_policy: 3, modestbranding: 1, customControls: true, noCookie: false }, mediaMetadata: { title: "", artist: "", album: "", artwork: [] }, markers: { enabled: false, points: [] } }, pip = { active: "picture-in-picture", inactive: "inline" }, providers = { html5: "html5", youtube: "youtube", vimeo: "vimeo" }, types = { audio: "audio", video: "video" };
+} }, defaults = { enabled: true, title: "", debug: false, autoplay: false, autopause: true, playsinline: true, seekTime: 10, volume: 1, muted: false, duration: null, displayDuration: true, invertTime: true, toggleInvert: true, ratio: null, clickToPlay: true, hideControls: true, resetOnEnd: false, disableContextMenu: true, loadSprite: true, iconPrefix: "plyr", iconUrl: "https://cdn.plyr.io/3.7.8/plyr.svg", blankVideo: "https://cdn.plyr.io/static/blank.mp4", quality: { default: 576, options: [4320, 2880, 2160, 1440, 1080, 720, 576, 480, 360, 240], forced: false, onChange: null }, loop: { active: false }, speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 4] }, keyboard: { focused: true, global: false }, tooltips: { controls: false, seek: true }, captions: { active: false, language: "auto", update: false }, fullscreen: { enabled: true, fallback: true, iosNative: false }, storage: { enabled: true, key: "plyr" }, controls: ["play-large", "play", "progress", "current-time", "mute", "volume", "captions", "settings", "pip", "airplay", "fullscreen"], settings: ["captions", "quality", "speed"], i18n: { restart: "Restart", rewind: "Rewind {seektime}s", play: "Play", pause: "Pause", fastForward: "Forward {seektime}s", seek: "Seek", seekLabel: "{currentTime} of {duration}", played: "Played", buffered: "Buffered", currentTime: "Current time", duration: "Duration", volume: "Volume", mute: "Mute", unmute: "Unmute", enableCaptions: "Enable captions", disableCaptions: "Disable captions", download: "Download", enterFullscreen: "Enter fullscreen", exitFullscreen: "Exit fullscreen", frameTitle: "Player for {title}", captions: "Captions", settings: "Settings", pip: "PIP", menuBack: "Go back to previous menu", speed: "Speed", normal: "Normal", quality: "Quality", loop: "Loop", start: "Start", end: "End", all: "All", reset: "Reset", disabled: "Disabled", enabled: "Enabled", advertisement: "Ad", qualityBadge: { 2160: "4K", 1440: "HD", 1080: "HD", 720: "HD", 576: "SD", 480: "SD" } }, urls: { download: null, vimeo: { sdk: "https://player.vimeo.com/api/player.js", iframe: "https://player.vimeo.com/video/{0}?{1}", api: "https://vimeo.com/api/oembed.json?url={0}" }, youtube: { sdk: "https://www.youtube.com/iframe_api", api: "https://noembed.com/embed?url=https://www.youtube.com/watch?v={0}" }, googleIMA: { sdk: "https://imasdk.googleapis.com/js/sdkloader/ima3.js" } }, listeners: { seek: null, play: null, pause: null, restart: null, rewind: null, fastForward: null, mute: null, volume: null, captions: null, download: null, fullscreen: null, pip: null, airplay: null, speed: null, quality: null, loop: null, language: null }, events: ["ended", "progress", "stalled", "playing", "waiting", "canplay", "canplaythrough", "loadstart", "loadeddata", "loadedmetadata", "timeupdate", "volumechange", "play", "pause", "error", "seeking", "seeked", "emptied", "ratechange", "cuechange", "download", "enterfullscreen", "exitfullscreen", "captionsenabled", "captionsdisabled", "languagechange", "controlshidden", "controlsshown", "ready", "statechange", "qualitychange", "adsloaded", "adscontentpause", "adscontentresume", "adstarted", "adsmidpoint", "adscomplete", "adsallcomplete", "adsimpression", "adsclick"], selectors: { editable: "input, textarea, select, [contenteditable]", container: ".plyr", controls: { container: null, wrapper: ".plyr__controls" }, labels: "[data-plyr]", buttons: { play: '[data-plyr="play"]', pause: '[data-plyr="pause"]', restart: '[data-plyr="restart"]', rewind: '[data-plyr="rewind"]', fastForward: '[data-plyr="fast-forward"]', mute: '[data-plyr="mute"]', captions: '[data-plyr="captions"]', download: '[data-plyr="download"]', fullscreen: '[data-plyr="fullscreen"]', pip: '[data-plyr="pip"]', airplay: '[data-plyr="airplay"]', settings: '[data-plyr="settings"]', loop: '[data-plyr="loop"]' }, inputs: { seek: '[data-plyr="seek"]', volume: '[data-plyr="volume"]', speed: '[data-plyr="speed"]', language: '[data-plyr="language"]', quality: '[data-plyr="quality"]' }, display: { currentTime: ".plyr__time--current", duration: ".plyr__time--duration", buffer: ".plyr__progress__buffer", loop: ".plyr__progress__loop", volume: ".plyr__volume--display" }, progress: ".plyr__progress", captions: ".plyr__captions", caption: ".plyr__caption" }, classNames: { type: "plyr--{0}", provider: "plyr--{0}", video: "plyr__video-wrapper", embed: "plyr__video-embed", videoFixedRatio: "plyr__video-wrapper--fixed-ratio", embedContainer: "plyr__video-embed__container", poster: "plyr__poster", posterEnabled: "plyr__poster-enabled", ads: "plyr__ads", control: "plyr__control", controlPressed: "plyr__control--pressed", playing: "plyr--playing", paused: "plyr--paused", stopped: "plyr--stopped", loading: "plyr--loading", hover: "plyr--hover", tooltip: "plyr__tooltip", cues: "plyr__cues", marker: "plyr__progress__marker", hidden: "plyr__sr-only", hideControls: "plyr--hide-controls", isTouch: "plyr--is-touch", uiSupported: "plyr--full-ui", noTransition: "plyr--no-transition", display: { time: "plyr__time" }, menu: { value: "plyr__menu__value", badge: "plyr__badge", open: "plyr--menu-open" }, captions: { enabled: "plyr--captions-enabled", active: "plyr--captions-active" }, fullscreen: { enabled: "plyr--fullscreen-enabled", fallback: "plyr--fullscreen-fallback" }, pip: { supported: "plyr--pip-supported", active: "plyr--pip-active" }, airplay: { supported: "plyr--airplay-supported", active: "plyr--airplay-active" }, previewThumbnails: { thumbContainer: "plyr__preview-thumb", thumbContainerShown: "plyr__preview-thumb--is-shown", imageContainer: "plyr__preview-thumb__image-container", timeContainer: "plyr__preview-thumb__time-container", scrubbingContainer: "plyr__preview-scrubbing", scrubbingContainerShown: "plyr__preview-scrubbing--is-shown" } }, attributes: { embed: { provider: "data-plyr-provider", id: "data-plyr-embed-id", hash: "data-plyr-embed-hash" } }, ads: { enabled: false, publisherId: "", tagUrl: "" }, previewThumbnails: { enabled: false, src: "" }, vimeo: { byline: false, portrait: false, title: false, speed: true, transparent: false, customControls: true, referrerPolicy: null, premium: false }, youtube: { rel: 0, showinfo: 0, iv_load_policy: 3, modestbranding: 1, customControls: true, noCookie: false }, mediaMetadata: { title: "", artist: "", album: "", artwork: [] }, markers: { enabled: false, points: [] } }, pip = { active: "picture-in-picture", inactive: "inline" }, providers = { html5: "html5", youtube: "youtube", vimeo: "vimeo" }, types = { audio: "audio", video: "video" };
 function getProviderByUrl(e) {
   return /^(https?:\/\/)?(www\.)?(youtube\.com|youtube-nocookie\.com|youtu\.?be)\/.+$/.test(e) ? providers.youtube : /^https?:\/\/player.vimeo.com\/video\/\d{0,9}(?=\b|\/)/.test(e) ? providers.vimeo : null;
 }
@@ -1552,14 +1559,15 @@ class Console {
 class Fullscreen {
   constructor(e) {
     _defineProperty$1(this, "onChange", () => {
-      if (!this.enabled)
+      if (!this.supported)
         return;
       const e2 = this.player.elements.buttons.fullscreen;
       is.element(e2) && (e2.pressed = this.active);
       const t = this.target === this.player.media ? this.target : this.player.elements.container;
       triggerEvent.call(this.player, t, this.active ? "enterfullscreen" : "exitfullscreen", true);
     }), _defineProperty$1(this, "toggleFallback", (e2 = false) => {
-      if (e2 ? this.scrollPosition = { x: window.scrollX || 0, y: window.scrollY || 0 } : window.scrollTo(this.scrollPosition.x, this.scrollPosition.y), document.body.style.overflow = e2 ? "hidden" : "", toggleClass(this.target, this.player.config.classNames.fullscreen.fallback, e2), browser.isIos) {
+      var _a2, _b;
+      if (e2 ? this.scrollPosition = { x: (_a2 = window.scrollX) != null ? _a2 : 0, y: (_b = window.scrollY) != null ? _b : 0 } : window.scrollTo(this.scrollPosition.x, this.scrollPosition.y), document.body.style.overflow = e2 ? "hidden" : "", toggleClass(this.target, this.player.config.classNames.fullscreen.fallback, e2), browser.isIos) {
         let t = document.head.querySelector('meta[name="viewport"]');
         const i = "viewport-fit=cover";
         t || (t = document.createElement("meta"), t.setAttribute("name", "viewport"));
@@ -1568,45 +1576,45 @@ class Fullscreen {
       }
       this.onChange();
     }), _defineProperty$1(this, "trapFocus", (e2) => {
-      if (browser.isIos || !this.active || e2.key !== "Tab")
+      if (browser.isIos || browser.isIPadOS || !this.active || "Tab" !== e2.key)
         return;
       const t = document.activeElement, i = getElements.call(this.player, "a[href], button:not(:disabled), input:not(:disabled), [tabindex]"), [s] = i, n = i[i.length - 1];
       t !== n || e2.shiftKey ? t === s && e2.shiftKey && (n.focus(), e2.preventDefault()) : (s.focus(), e2.preventDefault());
     }), _defineProperty$1(this, "update", () => {
-      if (this.enabled) {
+      if (this.supported) {
         let e2;
-        e2 = this.forceFallback ? "Fallback (forced)" : Fullscreen.native ? "Native" : "Fallback", this.player.debug.log(`${e2} fullscreen enabled`);
+        e2 = this.forceFallback ? "Fallback (forced)" : Fullscreen.nativeSupported ? "Native" : "Fallback", this.player.debug.log(`${e2} fullscreen enabled`);
       } else
         this.player.debug.log("Fullscreen not supported and fallback disabled");
-      toggleClass(this.player.elements.container, this.player.config.classNames.fullscreen.enabled, this.enabled);
+      toggleClass(this.player.elements.container, this.player.config.classNames.fullscreen.enabled, this.supported);
     }), _defineProperty$1(this, "enter", () => {
-      this.enabled && (browser.isIos && this.player.config.fullscreen.iosNative ? this.player.isVimeo ? this.player.embed.requestFullscreen() : this.target.webkitEnterFullscreen() : !Fullscreen.native || this.forceFallback ? this.toggleFallback(true) : this.prefix ? is.empty(this.prefix) || this.target[`${this.prefix}Request${this.property}`]() : this.target.requestFullscreen({ navigationUI: "hide" }));
+      this.supported && (browser.isIos && this.player.config.fullscreen.iosNative ? this.player.isVimeo ? this.player.embed.requestFullscreen() : this.target.webkitEnterFullscreen() : !Fullscreen.nativeSupported || this.forceFallback ? this.toggleFallback(true) : this.prefix ? is.empty(this.prefix) || this.target[`${this.prefix}Request${this.property}`]() : this.target.requestFullscreen({ navigationUI: "hide" }));
     }), _defineProperty$1(this, "exit", () => {
-      if (this.enabled)
+      if (this.supported)
         if (browser.isIos && this.player.config.fullscreen.iosNative)
-          this.target.webkitExitFullscreen(), silencePromise(this.player.play());
-        else if (!Fullscreen.native || this.forceFallback)
+          this.player.isVimeo ? this.player.embed.exitFullscreen() : this.target.webkitEnterFullscreen(), silencePromise(this.player.play());
+        else if (!Fullscreen.nativeSupported || this.forceFallback)
           this.toggleFallback(false);
         else if (this.prefix) {
           if (!is.empty(this.prefix)) {
-            const e2 = this.prefix === "moz" ? "Cancel" : "Exit";
+            const e2 = "moz" === this.prefix ? "Cancel" : "Exit";
             document[`${this.prefix}${e2}${this.property}`]();
           }
         } else
           (document.cancelFullScreen || document.exitFullscreen).call(document);
     }), _defineProperty$1(this, "toggle", () => {
       this.active ? this.exit() : this.enter();
-    }), this.player = e, this.prefix = Fullscreen.prefix, this.property = Fullscreen.property, this.scrollPosition = { x: 0, y: 0 }, this.forceFallback = e.config.fullscreen.fallback === "force", this.player.elements.fullscreen = e.config.fullscreen.container && closest$1(this.player.elements.container, e.config.fullscreen.container), on.call(this.player, document, this.prefix === "ms" ? "MSFullscreenChange" : `${this.prefix}fullscreenchange`, () => {
+    }), this.player = e, this.prefix = Fullscreen.prefix, this.property = Fullscreen.property, this.scrollPosition = { x: 0, y: 0 }, this.forceFallback = "force" === e.config.fullscreen.fallback, this.player.elements.fullscreen = e.config.fullscreen.container && closest$1(this.player.elements.container, e.config.fullscreen.container), on.call(this.player, document, "ms" === this.prefix ? "MSFullscreenChange" : `${this.prefix}fullscreenchange`, () => {
       this.onChange();
     }), on.call(this.player, this.player.elements.container, "dblclick", (e2) => {
       is.element(this.player.elements.controls) && this.player.elements.controls.contains(e2.target) || this.player.listeners.proxy(e2, this.toggle, "fullscreen");
     }), on.call(this, this.player.elements.container, "keydown", (e2) => this.trapFocus(e2)), this.update();
   }
-  static get native() {
+  static get nativeSupported() {
     return !!(document.fullscreenEnabled || document.webkitFullscreenEnabled || document.mozFullScreenEnabled || document.msFullscreenEnabled);
   }
-  get usingNative() {
-    return Fullscreen.native && !this.forceFallback;
+  get useNative() {
+    return Fullscreen.nativeSupported && !this.forceFallback;
   }
   static get prefix() {
     if (is.function(document.exitFullscreen))
@@ -1615,21 +1623,22 @@ class Fullscreen {
     return ["webkit", "moz", "ms"].some((t) => !(!is.function(document[`${t}ExitFullscreen`]) && !is.function(document[`${t}CancelFullScreen`])) && (e = t, true)), e;
   }
   static get property() {
-    return this.prefix === "moz" ? "FullScreen" : "Fullscreen";
+    return "moz" === this.prefix ? "FullScreen" : "Fullscreen";
   }
-  get enabled() {
-    return (Fullscreen.native || this.player.config.fullscreen.fallback) && this.player.config.fullscreen.enabled && this.player.supported.ui && this.player.isVideo;
+  get supported() {
+    return [this.player.config.fullscreen.enabled, this.player.isVideo, Fullscreen.nativeSupported || this.player.config.fullscreen.fallback, !this.player.isYouTube || Fullscreen.nativeSupported || !browser.isIos || this.player.config.playsinline && !this.player.config.fullscreen.iosNative].every(Boolean);
   }
   get active() {
-    if (!this.enabled)
+    if (!this.supported)
       return false;
-    if (!Fullscreen.native || this.forceFallback)
+    if (!Fullscreen.nativeSupported || this.forceFallback)
       return hasClass(this.target, this.player.config.classNames.fullscreen.fallback);
     const e = this.prefix ? this.target.getRootNode()[`${this.prefix}${this.property}Element`] : this.target.getRootNode().fullscreenElement;
     return e && e.shadowRoot ? e === this.target.getRootNode().host : e === this.target;
   }
   get target() {
-    return browser.isIos && this.player.config.fullscreen.iosNative ? this.player.media : this.player.elements.fullscreen || this.player.elements.container;
+    var _a2;
+    return browser.isIos && this.player.config.fullscreen.iosNative ? this.player.media : (_a2 = this.player.elements.fullscreen) != null ? _a2 : this.player.elements.container;
   }
 }
 function loadImage(e, t = 1) {
@@ -1647,7 +1656,7 @@ const ui = { addStyleHook() {
 }, build() {
   if (this.listeners.media(), !this.supported.ui)
     return this.debug.warn(`Basic support only for ${this.provider} ${this.type}`), void ui.toggleNativeControls.call(this, true);
-  is.element(this.elements.controls) || (controls.inject.call(this), this.listeners.controls()), ui.toggleNativeControls.call(this), this.isHTML5 && captions.setup.call(this), this.volume = null, this.muted = null, this.loop = null, this.quality = null, this.speed = null, controls.updateVolume.call(this), controls.timeUpdate.call(this), controls.durationUpdate.call(this), ui.checkPlaying.call(this), toggleClass(this.elements.container, this.config.classNames.pip.supported, support.pip && this.isHTML5 && this.isVideo), toggleClass(this.elements.container, this.config.classNames.airplay.supported, support.airplay && this.isHTML5), toggleClass(this.elements.container, this.config.classNames.isIos, browser.isIos), toggleClass(this.elements.container, this.config.classNames.isTouch, this.touch), this.ready = true, setTimeout(() => {
+  is.element(this.elements.controls) || (controls.inject.call(this), this.listeners.controls()), ui.toggleNativeControls.call(this), this.isHTML5 && captions.setup.call(this), this.volume = null, this.muted = null, this.loop = null, this.quality = null, this.speed = null, controls.updateVolume.call(this), controls.timeUpdate.call(this), controls.durationUpdate.call(this), ui.checkPlaying.call(this), toggleClass(this.elements.container, this.config.classNames.pip.supported, support.pip && this.isHTML5 && this.isVideo), toggleClass(this.elements.container, this.config.classNames.airplay.supported, support.airplay && this.isHTML5), toggleClass(this.elements.container, this.config.classNames.isTouch, this.touch), this.ready = true, setTimeout(() => {
     triggerEvent.call(this, this.media, "ready");
   }, 0), ui.setTitle.call(this), this.poster && ui.setPoster.call(this, this.poster, false).catch(() => {
   }), this.config.duration && controls.durationUpdate.call(this), this.config.mediaMetadata && controls.setMediaMetadata.call(this);
@@ -1674,7 +1683,7 @@ const ui = { addStyleHook() {
 }, checkPlaying(e) {
   toggleClass(this.elements.container, this.config.classNames.playing, this.playing), toggleClass(this.elements.container, this.config.classNames.paused, this.paused), toggleClass(this.elements.container, this.config.classNames.stopped, this.stopped), Array.from(this.elements.buttons.play || []).forEach((e2) => {
     Object.assign(e2, { pressed: this.playing }), e2.setAttribute("aria-label", i18n.get(this.playing ? "pause" : "play", this.config));
-  }), is.event(e) && e.type === "timeupdate" || ui.toggleControls.call(this);
+  }), is.event(e) && "timeupdate" === e.type || ui.toggleControls.call(this);
 }, checkLoading(e) {
   this.loading = ["stalled", "waiting"].includes(e.type), clearTimeout(this.timers.loading), this.timers.loading = setTimeout(() => {
     toggleClass(this.elements.container, this.config.classNames.loading, this.loading), ui.toggleControls.call(this);
@@ -1686,7 +1695,7 @@ const ui = { addStyleHook() {
     this.toggleControls(Boolean(e || this.loading || this.paused || t.pressed || t.hover || i));
   }
 }, migrateStyles() {
-  Object.values(__spreadValues({}, this.media.style)).filter((e) => !is.empty(e) && is.string(e) && e.startsWith("--plyr")).forEach((e) => {
+  Object.values({ ...this.media.style }).filter((e) => !is.empty(e) && is.string(e) && e.startsWith("--plyr")).forEach((e) => {
     this.elements.container.style.setProperty(e, this.media.style.getPropertyValue(e)), this.media.style.removeProperty(e);
   }), is.empty(this.media.style) && this.media.removeAttribute("style");
 } };
@@ -1695,27 +1704,14 @@ class Listeners {
     _defineProperty$1(this, "firstTouch", () => {
       const { player: e2 } = this, { elements: t } = e2;
       e2.touch = true, toggleClass(t.container, e2.config.classNames.isTouch, true);
-    }), _defineProperty$1(this, "setTabFocus", (e2) => {
-      const { player: t } = this, { elements: i } = t, { key: s, type: n, timeStamp: r } = e2;
-      if (clearTimeout(this.focusTimer), n === "keydown" && s !== "Tab")
-        return;
-      n === "keydown" && (this.lastKeyDown = r);
-      const a = r - this.lastKeyDown <= 20;
-      (n !== "focus" || a) && ((() => {
-        const e3 = t.config.classNames.tabFocus;
-        toggleClass(getElements.call(t, `.${e3}`), e3, false);
-      })(), n !== "focusout" && (this.focusTimer = setTimeout(() => {
-        const e3 = document.activeElement;
-        i.container.contains(e3) && toggleClass(document.activeElement, t.config.classNames.tabFocus, true);
-      }, 10)));
     }), _defineProperty$1(this, "global", (e2 = true) => {
       const { player: t } = this;
-      t.config.keyboard.global && toggleListener.call(t, window, "keydown keyup", this.handleKey, e2, false), toggleListener.call(t, document.body, "click", this.toggleMenu, e2), once.call(t, document.body, "touchstart", this.firstTouch), toggleListener.call(t, document.body, "keydown focus blur focusout", this.setTabFocus, e2, false, true);
+      t.config.keyboard.global && toggleListener.call(t, window, "keydown keyup", this.handleKey, e2, false), toggleListener.call(t, document.body, "click", this.toggleMenu, e2), once.call(t, document.body, "touchstart", this.firstTouch);
     }), _defineProperty$1(this, "container", () => {
       const { player: e2 } = this, { config: t, elements: i, timers: s } = e2;
       !t.keyboard.global && t.keyboard.focused && on.call(e2, i.container, "keydown keyup", this.handleKey, false), on.call(e2, i.container, "mousemove mouseleave touchstart touchmove enterfullscreen exitfullscreen", (t2) => {
         const { controls: n2 } = i;
-        n2 && t2.type === "enterfullscreen" && (n2.pressed = false, n2.hover = false);
+        n2 && "enterfullscreen" === t2.type && (n2.pressed = false, n2.hover = false);
         let r2 = 0;
         ["touchstart", "touchmove", "mousemove"].includes(t2.type) && (ui.toggleControls.call(e2, true), r2 = e2.touch ? 3e3 : 2e3), clearTimeout(s.controls), s.controls = setTimeout(() => ui.toggleControls.call(e2, false), r2);
       });
@@ -1737,7 +1733,7 @@ class Listeners {
         if (!e2.isEmbed && is.empty(e2.config.ratio))
           return;
         n();
-        (t2.type === "enterfullscreen" ? on : off).call(e2, window, "resize", r);
+        ("enterfullscreen" === t2.type ? on : off).call(e2, window, "resize", r);
       });
     }), _defineProperty$1(this, "media", () => {
       const { player: e2 } = this, { elements: t } = e2;
@@ -1769,12 +1765,12 @@ class Listeners {
       const i = e2.config.events.concat(["keyup", "keydown"]).join(" ");
       on.call(e2, e2.media, i, (i2) => {
         let { detail: s = {} } = i2;
-        i2.type === "error" && (s = e2.media.error), triggerEvent.call(e2, t.container, i2.type, true, s);
+        "error" === i2.type && (s = e2.media.error), triggerEvent.call(e2, t.container, i2.type, true, s);
       });
     }), _defineProperty$1(this, "proxy", (e2, t, i) => {
       const { player: s } = this, n = s.config.listeners[i];
       let r = true;
-      is.function(n) && (r = n.call(s, e2)), r !== false && is.function(t) && t.call(s, e2);
+      is.function(n) && (r = n.call(s, e2)), false !== r && is.function(t) && t.call(s, e2);
     }), _defineProperty$1(this, "bind", (e2, t, i, s, n = true) => {
       const { player: r } = this, a = r.config.listeners[s], o = is.function(a);
       on.call(r, e2, t, (e3) => this.proxy(e3, i, s), n && !o);
@@ -1799,9 +1795,9 @@ class Listeners {
       }, "pip"), this.bind(t.buttons.airplay, "click", e2.airplay, "airplay"), this.bind(t.buttons.settings, "click", (t2) => {
         t2.stopPropagation(), t2.preventDefault(), controls.toggleMenu.call(e2, t2);
       }, null, false), this.bind(t.buttons.settings, "keyup", (t2) => {
-        ["Space", "Enter"].includes(t2.key) && (t2.key !== "Enter" ? (t2.preventDefault(), t2.stopPropagation(), controls.toggleMenu.call(e2, t2)) : controls.focusFirstMenuItem.call(e2, null, true));
+        [" ", "Enter"].includes(t2.key) && ("Enter" !== t2.key ? (t2.preventDefault(), t2.stopPropagation(), controls.toggleMenu.call(e2, t2)) : controls.focusFirstMenuItem.call(e2, null, true));
       }, null, false), this.bind(t.settings.menu, "keydown", (t2) => {
-        t2.key === "Escape" && controls.toggleMenu.call(e2, t2);
+        "Escape" === t2.key && controls.toggleMenu.call(e2, t2);
       }), this.bind(t.inputs.seek, "mousedown mousemove", (e3) => {
         const i2 = t.progress.getBoundingClientRect(), s = 100 / i2.width * (e3.pageX - i2.left);
         e3.currentTarget.setAttribute("seek-value", s);
@@ -1832,17 +1828,17 @@ class Listeners {
       }), this.bind(t.progress, "mouseup touchend", (t2) => {
         const { previewThumbnails: i2 } = e2;
         i2 && i2.loaded && i2.endScrubbing(t2);
-      }), browser.isWebkit && Array.from(getElements.call(e2, 'input[type="range"]')).forEach((t2) => {
+      }), browser.isWebKit && Array.from(getElements.call(e2, 'input[type="range"]')).forEach((t2) => {
         this.bind(t2, "input", (t3) => controls.updateRangeFill.call(e2, t3.target));
       }), e2.config.toggleInvert && !is.element(t.display.duration) && this.bind(t.display.currentTime, "click", () => {
-        e2.currentTime !== 0 && (e2.config.invertTime = !e2.config.invertTime, controls.timeUpdate.call(e2));
+        0 !== e2.currentTime && (e2.config.invertTime = !e2.config.invertTime, controls.timeUpdate.call(e2));
       }), this.bind(t.inputs.volume, i, (t2) => {
         e2.volume = t2.target.value;
       }, "volume"), this.bind(t.controls, "mouseenter mouseleave", (i2) => {
-        t.controls.hover = !e2.touch && i2.type === "mouseenter";
+        t.controls.hover = !e2.touch && "mouseenter" === i2.type;
       }), t.fullscreen && Array.from(t.fullscreen.children).filter((e3) => !e3.contains(t.container)).forEach((i2) => {
         this.bind(i2, "mouseenter mouseleave", (i3) => {
-          t.controls && (t.controls.hover = !e2.touch && i3.type === "mouseenter");
+          t.controls && (t.controls.hover = !e2.touch && "mouseenter" === i3.type);
         });
       }), this.bind(t.controls, "mousedown mouseup touchstart touchend touchcancel", (e3) => {
         t.controls.pressed = ["mousedown", "touchstart"].includes(e3.type);
@@ -1857,12 +1853,12 @@ class Listeners {
         const i2 = t2.webkitDirectionInvertedFromDevice, [s, n] = [t2.deltaX, -t2.deltaY].map((e3) => i2 ? -e3 : e3), r = Math.sign(Math.abs(s) > Math.abs(n) ? s : n);
         e2.increaseVolume(r / 50);
         const { volume: a } = e2.media;
-        (r === 1 && a < 1 || r === -1 && a > 0) && t2.preventDefault();
+        (1 === r && a < 1 || -1 === r && a > 0) && t2.preventDefault();
       }, "volume", false);
-    }), this.player = e, this.lastKey = null, this.focusTimer = null, this.lastKeyDown = null, this.handleKey = this.handleKey.bind(this), this.toggleMenu = this.toggleMenu.bind(this), this.setTabFocus = this.setTabFocus.bind(this), this.firstTouch = this.firstTouch.bind(this);
+    }), this.player = e, this.lastKey = null, this.focusTimer = null, this.lastKeyDown = null, this.handleKey = this.handleKey.bind(this), this.toggleMenu = this.toggleMenu.bind(this), this.firstTouch = this.firstTouch.bind(this);
   }
   handleKey(e) {
-    const { player: t } = this, { elements: i } = t, { key: s, type: n, altKey: r, ctrlKey: a, metaKey: o, shiftKey: l } = e, c = n === "keydown", u = c && s === this.lastKey;
+    const { player: t } = this, { elements: i } = t, { key: s, type: n, altKey: r, ctrlKey: a, metaKey: o, shiftKey: l } = e, c = "keydown" === n, u = c && s === this.lastKey;
     if (r || a || o || l)
       return;
     if (!s)
@@ -1873,10 +1869,10 @@ class Listeners {
         const { editable: s2 } = t.config.selectors, { seek: r2 } = i.inputs;
         if (n2 !== r2 && matches(n2, s2))
           return;
-        if (e.key === "Space" && matches(n2, 'button, [role^="menuitem"]'))
+        if (" " === e.key && matches(n2, 'button, [role^="menuitem"]'))
           return;
       }
-      switch (["Space", "ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "c", "f", "k", "l", "m"].includes(s) && (e.preventDefault(), e.stopPropagation()), s) {
+      switch ([" ", "ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "c", "f", "k", "l", "m"].includes(s) && (e.preventDefault(), e.stopPropagation()), s) {
         case "0":
         case "1":
         case "2":
@@ -1889,7 +1885,7 @@ class Listeners {
         case "9":
           u || (d = parseInt(s, 10), t.currentTime = t.duration / 10 * d);
           break;
-        case "Space":
+        case " ":
         case "k":
           u || silencePromise(t.togglePlay());
           break;
@@ -1917,7 +1913,7 @@ class Listeners {
         case "l":
           t.loop = !t.loop;
       }
-      s === "Escape" && !t.fullscreen.usingNative && t.fullscreen.active && t.fullscreen.toggle(), this.lastKey = s;
+      "Escape" === s && !t.fullscreen.usingNative && t.fullscreen.active && t.fullscreen.toggle(), this.lastKey = s;
     } else
       this.lastKey = null;
     var d;
@@ -1954,26 +1950,26 @@ var loadjs_umd = createCommonjsModule(function(e, t) {
     }
     function o(t3, i2, s2, n2) {
       var r2, a2, l2 = document, c2 = s2.async, u = (s2.numRetries || 0) + 1, d = s2.before || e2, h = t3.replace(/[\?|#].*$/, ""), m = t3.replace(/^(css|img)!/, "");
-      n2 = n2 || 0, /(^css!|\.css$)/.test(h) ? ((a2 = l2.createElement("link")).rel = "stylesheet", a2.href = m, (r2 = "hideFocus" in a2) && a2.relList && (r2 = 0, a2.rel = "preload", a2.as = "style")) : /(^img!|\.(png|gif|jpg|svg|webp)$)/.test(h) ? (a2 = l2.createElement("img")).src = m : ((a2 = l2.createElement("script")).src = t3, a2.async = c2 === void 0 || c2), a2.onload = a2.onerror = a2.onbeforeload = function(e3) {
+      n2 = n2 || 0, /(^css!|\.css$)/.test(h) ? ((a2 = l2.createElement("link")).rel = "stylesheet", a2.href = m, (r2 = "hideFocus" in a2) && a2.relList && (r2 = 0, a2.rel = "preload", a2.as = "style")) : /(^img!|\.(png|gif|jpg|svg|webp)$)/.test(h) ? (a2 = l2.createElement("img")).src = m : ((a2 = l2.createElement("script")).src = t3, a2.async = void 0 === c2 || c2), a2.onload = a2.onerror = a2.onbeforeload = function(e3) {
         var l3 = e3.type[0];
         if (r2)
           try {
             a2.sheet.cssText.length || (l3 = "e");
           } catch (e4) {
-            e4.code != 18 && (l3 = "e");
+            18 != e4.code && (l3 = "e");
           }
-        if (l3 == "e") {
+        if ("e" == l3) {
           if ((n2 += 1) < u)
             return o(t3, i2, s2, n2);
-        } else if (a2.rel == "preload" && a2.as == "style")
+        } else if ("preload" == a2.rel && "style" == a2.as)
           return a2.rel = "stylesheet";
         i2(t3, l3, e3.defaultPrevented);
-      }, d(t3, a2) !== false && l2.head.appendChild(a2);
+      }, false !== d(t3, a2) && l2.head.appendChild(a2);
     }
     function l(e3, t3, i2) {
       var s2, n2, r2 = (e3 = e3.push ? e3 : [e3]).length, a2 = r2, l2 = [];
       for (s2 = function(e4, i3, s3) {
-        if (i3 == "e" && l2.push(e4), i3 == "b") {
+        if ("e" == i3 && l2.push(e4), "b" == i3) {
           if (!s3)
             return;
           l2.push(e4);
@@ -2025,7 +2021,7 @@ function parseId$1(e) {
 }
 function parseHash(e) {
   const t = e.match(/^.*(vimeo.com\/|video\/)(\d+)(\?.*&*h=|\/)+([\d,a-f]+)/);
-  return t && t.length === 5 ? t[4] : null;
+  return t && 5 === t.length ? t[4] : null;
 }
 function assurePlaybackState$1(e) {
   e && !this.embed.hasPlayed && (this.embed.hasPlayed = true), this.media.paused === e && (this.media.paused = !e, triggerEvent.call(this, this.media, e ? "play" : "pause"));
@@ -2038,12 +2034,12 @@ const vimeo = { setup() {
     e.debug.warn("Vimeo SDK (player.js) failed to load", t);
   });
 }, ready() {
-  const e = this, t = e.config.vimeo, _a2 = t, { premium: i, referrerPolicy: s } = _a2, n = __objRest(_a2, ["premium", "referrerPolicy"]);
+  const e = this, t = e.config.vimeo, { premium: i, referrerPolicy: s, ...n } = t;
   let r = e.media.getAttribute("src"), a = "";
   is.empty(r) ? (r = e.media.getAttribute(e.config.attributes.embed.id), a = e.media.getAttribute(e.config.attributes.embed.hash)) : a = parseHash(r);
   const o = a ? { h: a } : {};
   i && Object.assign(n, { controls: false, sidedock: false });
-  const l = buildUrlParams(__spreadValues(__spreadValues({ loop: e.config.loop.active, autoplay: e.autoplay, muted: e.muted, gesture: "media", playsinline: !this.config.fullscreen.iosNative }, o), n)), c = parseId$1(r), u = createElement("iframe"), d = format(e.config.urls.vimeo.iframe, c, l);
+  const l = buildUrlParams({ loop: e.config.loop.active, autoplay: e.autoplay, muted: e.muted, gesture: "media", playsinline: e.config.playsinline, ...o, ...n }), c = parseId$1(r), u = createElement("iframe"), d = format(e.config.urls.vimeo.iframe, c, l);
   if (u.setAttribute("src", d), u.setAttribute("allowfullscreen", ""), u.setAttribute("allow", ["autoplay", "fullscreen", "picture-in-picture", "encrypted-media", "accelerometer", "gyroscope"].join("; ")), is.empty(s) || u.setAttribute("referrerPolicy", s), i || !t.customControls)
     u.setAttribute("data-poster", e.poster), e.media = replaceElement(u, e.media);
   else {
@@ -2079,7 +2075,7 @@ const vimeo = { setup() {
   let { muted: g } = e.config;
   Object.defineProperty(e.media, "muted", { get: () => g, set(t2) {
     const i2 = !!is.boolean(t2) && t2;
-    e.embed.setVolume(i2 ? 0 : e.config.volume).then(() => {
+    e.embed.setMuted(!!i2 || e.config.muted).then(() => {
       g = i2, triggerEvent.call(e, e.media, "volumechange");
     });
   } });
@@ -2126,7 +2122,7 @@ const vimeo = { setup() {
   }), e.embed.on("timeupdate", (t2) => {
     e.media.seeking = false, h = t2.seconds, triggerEvent.call(e, e.media, "timeupdate");
   }), e.embed.on("progress", (t2) => {
-    e.media.buffered = t2.percent, triggerEvent.call(e, e.media, "progress"), parseInt(t2.percent, 10) === 1 && triggerEvent.call(e, e.media, "canplaythrough"), e.embed.getDuration().then((t3) => {
+    e.media.buffered = t2.percent, triggerEvent.call(e, e.media, "progress"), 1 === parseInt(t2.percent, 10) && triggerEvent.call(e, e.media, "canplaythrough"), e.embed.getDuration().then((t3) => {
       t3 !== e.media.duration && (e.media.duration = t3, triggerEvent.call(e, e.media, "durationchange"));
     });
   }), e.embed.on("seeked", () => {
@@ -2146,7 +2142,7 @@ function assurePlaybackState(e) {
   e && !this.embed.hasPlayed && (this.embed.hasPlayed = true), this.media.paused === e && (this.media.paused = !e, triggerEvent.call(this, this.media, e ? "play" : "pause"));
 }
 function getHost(e) {
-  return e.noCookie ? "https://www.youtube-nocookie.com" : window.location.protocol === "http:" ? "http://www.youtube.com" : void 0;
+  return e.noCookie ? "https://www.youtube-nocookie.com" : "http:" === window.location.protocol ? "http://www.youtube.com" : void 0;
 }
 const youtube = { setup() {
   if (toggleClass(this.elements.wrapper, this.config.classNames.embed, true), is.object(window.YT) && is.function(window.YT.Player))
@@ -2183,9 +2179,9 @@ const youtube = { setup() {
     }).catch(() => {
     });
   }
-  e.embed = new window.YT.Player(e.media, { videoId: n, host: getHost(t), playerVars: extend({}, { autoplay: e.config.autoplay ? 1 : 0, hl: e.config.hl, controls: e.supported.ui && t.customControls ? 0 : 1, disablekb: 1, playsinline: e.config.fullscreen.iosNative ? 0 : 1, cc_load_policy: e.captions.active ? 1 : 0, cc_lang_pref: e.config.captions.language, widget_referrer: window ? window.location.href : null }, t), events: { onError(t2) {
+  e.embed = new window.YT.Player(e.media, { videoId: n, host: getHost(t), playerVars: extend({}, { autoplay: e.config.autoplay ? 1 : 0, hl: e.config.hl, controls: e.supported.ui && t.customControls ? 0 : 1, disablekb: 1, playsinline: e.config.playsinline && !e.config.fullscreen.iosNative ? 1 : 0, cc_load_policy: e.captions.active ? 1 : 0, cc_lang_pref: e.config.captions.language, widget_referrer: window ? window.location.href : null }, t), events: { onError(t2) {
     if (!e.media.error) {
-      const i2 = t2.data, s2 = { 2: "The request contains an invalid parameter value. For example, this error occurs if you specify a video ID that does not have 11 characters, or if the video ID contains invalid characters, such as exclamation points or asterisks.", 5: "The requested content cannot be played in an HTML5 player or another error related to the HTML5 player has occurred.", 100: "The video requested was not found. This error occurs when a video has been removed (for any reason) or has been marked as private.", 101: "The owner of the requested video does not allow it to be played in embedded players.", 150: "The owner of the requested video does not allow it to be played in embedded players." }[i2] || "An unknown error occured";
+      const i2 = t2.data, s2 = { 2: "The request contains an invalid parameter value. For example, this error occurs if you specify a video ID that does not have 11 characters, or if the video ID contains invalid characters, such as exclamation points or asterisks.", 5: "The requested content cannot be played in an HTML5 player or another error related to the HTML5 player has occurred.", 100: "The video requested was not found. This error occurs when a video has been removed (for any reason) or has been marked as private.", 101: "The owner of the requested video does not allow it to be played in embedded players.", 150: "The owner of the requested video does not allow it to be played in embedded players." }[i2] || "An unknown error occurred";
       e.media.error = { code: i2, message: s2 }, triggerEvent.call(e, e.media, "error");
     }
   }, onPlaybackRateChange(t2) {
@@ -2217,7 +2213,7 @@ const youtube = { setup() {
     } }), Object.defineProperty(e.media, "currentSrc", { get: () => s2.getVideoUrl() }), Object.defineProperty(e.media, "ended", { get: () => e.currentTime === e.duration });
     const o = s2.getAvailablePlaybackRates();
     e.options.speed = o.filter((t2) => e.config.speed.options.includes(t2)), e.supported.ui && t.customControls && e.media.setAttribute("tabindex", -1), triggerEvent.call(e, e.media, "timeupdate"), triggerEvent.call(e, e.media, "durationchange"), clearInterval(e.timers.buffering), e.timers.buffering = setInterval(() => {
-      e.media.buffered = s2.getVideoLoadedFraction(), (e.media.lastBuffered === null || e.media.lastBuffered < e.media.buffered) && triggerEvent.call(e, e.media, "progress"), e.media.lastBuffered = e.media.buffered, e.media.buffered === 1 && (clearInterval(e.timers.buffering), triggerEvent.call(e, e.media, "canplaythrough"));
+      e.media.buffered = s2.getVideoLoadedFraction(), (null === e.media.lastBuffered || e.media.lastBuffered < e.media.buffered) && triggerEvent.call(e, e.media, "progress"), e.media.lastBuffered = e.media.buffered, 1 === e.media.buffered && (clearInterval(e.timers.buffering), triggerEvent.call(e, e.media, "canplaythrough"));
     }, 200), t.customControls && setTimeout(() => ui.build.call(e), 50);
   }, onStateChange(i2) {
     const s2 = i2.target;
@@ -2284,7 +2280,7 @@ class Ads {
       }), this.trigger("loaded");
     }), _defineProperty$1(this, "addCuePoints", () => {
       is.empty(this.cuePoints) || this.cuePoints.forEach((e2) => {
-        if (e2 !== 0 && e2 !== -1 && e2 < this.player.duration) {
+        if (0 !== e2 && -1 !== e2 && e2 < this.player.duration) {
           const t = this.player.elements.progress;
           if (is.element(t)) {
             const i = 100 / this.player.duration * e2, s = createElement("span", { class: this.player.config.classNames.cues });
@@ -2411,7 +2407,7 @@ class PreviewThumbnails {
   constructor(e) {
     _defineProperty$1(this, "load", () => {
       this.player.elements.display.seekTooltip && (this.player.elements.display.seekTooltip.hidden = this.enabled), this.enabled && this.getThumbnails().then(() => {
-        this.enabled && (this.render(), this.determineContainerAutoSizing(), this.loaded = true);
+        this.enabled && (this.render(), this.determineContainerAutoSizing(), this.listeners(), this.loaded = true);
       });
     }), _defineProperty$1(this, "getThumbnails", () => new Promise((e2) => {
       const { src: t } = this.player.config.previewThumbnails;
@@ -2439,13 +2435,13 @@ class PreviewThumbnails {
       });
     })), _defineProperty$1(this, "startMove", (e2) => {
       if (this.loaded && is.event(e2) && ["touchmove", "mousemove"].includes(e2.type) && this.player.media.duration) {
-        if (e2.type === "touchmove")
+        if ("touchmove" === e2.type)
           this.seekTime = this.player.media.duration * (this.player.elements.inputs.seek.value / 100);
         else {
           var t, i;
           const s = this.player.elements.progress.getBoundingClientRect(), n = 100 / s.width * (e2.pageX - s.left);
           this.seekTime = this.player.media.duration * (n / 100), this.seekTime < 0 && (this.seekTime = 0), this.seekTime > this.player.media.duration - 1 && (this.seekTime = this.player.media.duration - 1), this.mousePosX = e2.pageX, this.elements.thumb.time.innerText = formatTime(this.seekTime);
-          const r = (t = this.player.config.markers) === null || t === void 0 || (i = t.points) === null || i === void 0 ? void 0 : i.find(({ time: e3 }) => e3 === Math.round(this.seekTime));
+          const r = null === (t = this.player.config.markers) || void 0 === t || null === (i = t.points) || void 0 === i ? void 0 : i.find(({ time: e3 }) => e3 === Math.round(this.seekTime));
           r && this.elements.thumb.time.insertAdjacentHTML("afterbegin", `${r.label}<br>`);
         }
         this.showImageAtCurrentTime();
@@ -2453,7 +2449,7 @@ class PreviewThumbnails {
     }), _defineProperty$1(this, "endMove", () => {
       this.toggleThumbContainer(false, true);
     }), _defineProperty$1(this, "startScrubbing", (e2) => {
-      (is.nullOrUndefined(e2.button) || e2.button === false || e2.button === 0) && (this.mouseDown = true, this.player.media.duration && (this.toggleScrubbingContainer(true), this.toggleThumbContainer(false, true), this.showImageAtCurrentTime()));
+      (is.nullOrUndefined(e2.button) || false === e2.button || 0 === e2.button) && (this.mouseDown = true, this.player.media.duration && (this.toggleScrubbingContainer(true), this.toggleThumbContainer(false, true), this.showImageAtCurrentTime()));
     }), _defineProperty$1(this, "endScrubbing", () => {
       this.mouseDown = false, Math.ceil(this.lastTime) === Math.ceil(this.player.media.currentTime) ? this.toggleScrubbingContainer(false) : once.call(this.player, this.player.media, "timeupdate", () => {
         this.mouseDown || this.toggleScrubbingContainer(false);
@@ -2492,7 +2488,7 @@ class PreviewThumbnails {
       this.player.debug.log(`Showing thumb: ${n}. num: ${s}. qual: ${i}. newimg: ${r}`), this.setImageSizeAndOffset(e2, t), r && (this.currentImageContainer.appendChild(e2), this.currentImageElement = e2, this.loadedImages.includes(n) || this.loadedImages.push(n)), this.preloadNearby(s, true).then(this.preloadNearby(s, false)).then(this.getHigherQuality(i, e2, t, n));
     }), _defineProperty$1(this, "removeOldImages", (e2) => {
       Array.from(this.currentImageContainer.children).forEach((t) => {
-        if (t.tagName.toLowerCase() !== "img")
+        if ("img" !== t.tagName.toLowerCase())
           return;
         const i = this.usingSprites ? 500 : 1e3;
         if (t.dataset.index !== e2.dataset.index && !t.dataset.deleting) {
@@ -2598,7 +2594,7 @@ const source = { insertElements(e, t) {
 }, change(e) {
   getDeep(e, "sources.length") ? (html5.cancelRequests.call(this), this.destroy.call(this, () => {
     this.options.quality = [], removeElement(this.media), this.media = null, is.element(this.elements.container) && this.elements.container.removeAttribute("class");
-    const { sources: t, type: i } = e, [{ provider: s = providers.html5, src: n }] = t, r = s === "html5" ? i : "div", a = s === "html5" ? {} : { src: n };
+    const { sources: t, type: i } = e, [{ provider: s = providers.html5, src: n }] = t, r = "html5" === s ? i : "div", a = "html5" === s ? {} : { src: n };
     Object.assign(this, { provider: s, type: i, supported: support.check(i, s, this.config.playsinline), media: createElement(r, a) }), this.elements.container.appendChild(this.media), is.boolean(e.autoplay) && (this.config.autoplay = e.autoplay), this.isHTML5 && (this.config.crossorigin && this.media.setAttribute("crossorigin", ""), this.config.autoplay && this.media.setAttribute("autoplay", ""), is.empty(e.poster) || (this.poster = e.poster), this.config.loop.active && this.media.setAttribute("loop", ""), this.config.muted && this.media.setAttribute("muted", ""), this.config.playsinline && this.media.setAttribute("playsinline", "")), ui.addStyleHook.call(this), this.isHTML5 && source.insertElements.call(this, "source", t), this.config.title = e.title, media.setup.call(this), this.isHTML5 && Object.keys(e).includes("tracks") && source.insertElements.call(this, "track", e.tracks), (this.isHTML5 || this.isEmbed && !this.supported.ui) && ui.build.call(this), this.isHTML5 && this.media.load(), is.empty(e.previewThumbnails) || (Object.assign(this.config.previewThumbnails, e.previewThumbnails), this.previewThumbnails && this.previewThumbnails.loaded && (this.previewThumbnails.destroy(), this.previewThumbnails = null), this.config.previewThumbnails.enabled && (this.previewThumbnails = new PreviewThumbnails(this))), this.fullscreen.update();
   }, true)) : this.debug.warn("Invalid source format");
 } };
@@ -2621,7 +2617,7 @@ class Plyr$1 {
       support.airplay && this.media.webkitShowPlaybackTargetPicker();
     }), _defineProperty$1(this, "toggleControls", (e2) => {
       if (this.supported.ui && !this.isAudio) {
-        const t2 = hasClass(this.elements.container, this.config.classNames.hideControls), i2 = e2 === void 0 ? void 0 : !e2, s2 = toggleClass(this.elements.container, this.config.classNames.hideControls, i2);
+        const t2 = hasClass(this.elements.container, this.config.classNames.hideControls), i2 = void 0 === e2 ? void 0 : !e2, s2 = toggleClass(this.elements.container, this.config.classNames.hideControls, i2);
         if (s2 && is.array(this.config.controls) && this.config.controls.includes("settings") && !is.empty(this.config.settings) && controls.toggleMenu.call(this, false), s2 !== t2) {
           const e3 = s2 ? "controlshidden" : "controlsshown";
           triggerEvent.call(this, this.media, e3);
@@ -2643,7 +2639,7 @@ class Plyr$1 {
           this.elements = null, this.media = null;
         }, 200));
       };
-      this.stop(), clearTimeout(this.timers.loading), clearTimeout(this.timers.controls), clearTimeout(this.timers.resized), this.isHTML5 ? (ui.toggleNativeControls.call(this, true), i2()) : this.isYouTube ? (clearInterval(this.timers.buffering), clearInterval(this.timers.playing), this.embed !== null && is.function(this.embed.destroy) && this.embed.destroy(), i2()) : this.isVimeo && (this.embed !== null && this.embed.unload().then(i2), setTimeout(i2, 200));
+      this.stop(), clearTimeout(this.timers.loading), clearTimeout(this.timers.controls), clearTimeout(this.timers.resized), this.isHTML5 ? (ui.toggleNativeControls.call(this, true), i2()) : this.isYouTube ? (clearInterval(this.timers.buffering), clearInterval(this.timers.playing), null !== this.embed && is.function(this.embed.destroy) && this.embed.destroy(), i2()) : this.isVimeo && (null !== this.embed && this.embed.unload().then(i2), setTimeout(i2, 200));
     }), _defineProperty$1(this, "supports", (e2) => support.mime.call(this, e2)), this.timers = {}, this.ready = false, this.loading = false, this.failed = false, this.touch = support.touch, this.media = e, is.string(this.media) && (this.media = document.querySelectorAll(this.media)), (window.jQuery && this.media instanceof jQuery || is.nodeList(this.media) || is.array(this.media)) && (this.media = this.media[0]), this.config = extend({}, defaults, Plyr$1.defaults, t || {}, (() => {
       try {
         return JSON.parse(this.media.getAttribute("data-plyr-config"));
@@ -2682,7 +2678,7 @@ class Plyr$1 {
       default:
         return void this.debug.error("Setup failed: unsupported type");
     }
-    this.supported = support.check(this.type, this.provider, this.config.playsinline), this.supported.api ? (this.eventListeners = [], this.listeners = new Listeners(this), this.storage = new Storage(this), this.media.plyr = this, is.element(this.elements.container) || (this.elements.container = createElement("div", { tabindex: 0 }), wrap(this.media, this.elements.container)), ui.migrateStyles.call(this), ui.addStyleHook.call(this), media.setup.call(this), this.config.debug && on.call(this, this.elements.container, this.config.events.join(" "), (e2) => {
+    this.supported = support.check(this.type, this.provider), this.supported.api ? (this.eventListeners = [], this.listeners = new Listeners(this), this.storage = new Storage(this), this.media.plyr = this, is.element(this.elements.container) || (this.elements.container = createElement("div"), wrap(this.media, this.elements.container)), ui.migrateStyles.call(this), ui.addStyleHook.call(this), media.setup.call(this), this.config.debug && on.call(this, this.elements.container, this.config.events.join(" "), (e2) => {
       this.debug.log(`event: ${e2.type}`);
     }), this.fullscreen = new Fullscreen(this), (this.isHTML5 || this.isEmbed && !this.supported.ui) && ui.build.call(this), this.listeners.container(), this.listeners.global(), this.config.ads.enabled && (this.ads = new Ads(this)), this.isHTML5 && this.config.autoplay && this.once("canplay", () => silencePromise(this.play())), this.lastSeekTime = 0, this.config.previewThumbnails.enabled && (this.previewThumbnails = new PreviewThumbnails(this))) : this.debug.error("Setup failed: no support");
   }
@@ -2711,7 +2707,7 @@ class Plyr$1 {
     return Boolean(this.media.paused);
   }
   get stopped() {
-    return Boolean(this.paused && this.currentTime === 0);
+    return Boolean(this.paused && 0 === this.currentTime);
   }
   get ended() {
     return Boolean(this.media.ended);
@@ -2854,8 +2850,8 @@ class Plyr$1 {
   setPreviewThumbnails(e) {
     this.previewThumbnails && this.previewThumbnails.loaded && (this.previewThumbnails.destroy(), this.previewThumbnails = null), Object.assign(this.config.previewThumbnails, e), this.config.previewThumbnails.enabled && (this.previewThumbnails = new PreviewThumbnails(this));
   }
-  static supported(e, t, i) {
-    return support.check(e, t, i);
+  static supported(e, t) {
+    return support.check(e, t);
   }
   static loadSprite(e, t) {
     return loadSprite(e, t);
@@ -3056,12 +3052,15 @@ function instance($$self, $$props, $$invalidate) {
         hls.loadSource(src);
         hls.attachMedia(player_element);
       }
-      player = new Plyr$1(player_element, {
-        fullscreen: { enabled: false },
-        controls: ["play", "progress", "current-time", "mute", "volume"],
-        clickToPlay: false,
-        youtube: { autoplay: true }
-      });
+      player = new Plyr$1(
+        player_element,
+        {
+          fullscreen: { enabled: false },
+          controls: ["play", "progress", "current-time", "mute", "volume"],
+          clickToPlay: false,
+          youtube: { autoplay: true }
+        }
+      );
       $$invalidate(7, sync.player = player, sync);
     }
   });
@@ -3339,14 +3338,14 @@ class Sync {
     this._sync_timer = setInterval(this.syncAll.bind(this), this._interval);
   }
 }
-var styles = /* @__PURE__ */ (() => '@charset "UTF-8";@keyframes plyr-progress{to{background-position:25px 0;background-position:var(--plyr-progress-loading-size,25px) 0}}@keyframes plyr-popup{0%{opacity:.5;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes plyr-fade-in{0%{opacity:0}to{opacity:1}}.plyr{-moz-osx-font-smoothing:grayscale;-webkit-font-smoothing:antialiased;align-items:center;direction:ltr;display:flex;flex-direction:column;font-family:inherit;font-family:var(--plyr-font-family,inherit);font-variant-numeric:tabular-nums;font-weight:400;font-weight:var(--plyr-font-weight-regular,400);line-height:1.7;line-height:var(--plyr-line-height,1.7);max-width:100%;min-width:200px;position:relative;text-shadow:none;transition:box-shadow .3s ease;z-index:0}.plyr audio,.plyr iframe,.plyr video{display:block;height:100%;width:100%}.plyr button{font:inherit;line-height:inherit;width:auto}.plyr:focus{outline:0}.plyr--full-ui{box-sizing:border-box}.plyr--full-ui *,.plyr--full-ui :after,.plyr--full-ui :before{box-sizing:inherit}.plyr--full-ui a,.plyr--full-ui button,.plyr--full-ui input,.plyr--full-ui label{touch-action:manipulation}.plyr__badge{background:#4a5464;background:var(--plyr-badge-background,#4a5464);border-radius:2px;border-radius:var(--plyr-badge-border-radius,2px);color:#fff;color:var(--plyr-badge-text-color,#fff);font-size:9px;font-size:var(--plyr-font-size-badge,9px);line-height:1;padding:3px 4px}.plyr--full-ui ::-webkit-media-text-track-container{display:none}.plyr__captions{animation:plyr-fade-in .3s ease;bottom:0;display:none;font-size:13px;font-size:var(--plyr-font-size-small,13px);left:0;padding:10px;padding:var(--plyr-control-spacing,10px);position:absolute;text-align:center;transition:transform .4s ease-in-out;width:100%}.plyr__captions span:empty{display:none}@media (min-width:480px){.plyr__captions{font-size:15px;font-size:var(--plyr-font-size-base,15px);padding:20px;padding:calc(var(--plyr-control-spacing, 10px)*2)}}@media (min-width:768px){.plyr__captions{font-size:18px;font-size:var(--plyr-font-size-large,18px)}}.plyr--captions-active .plyr__captions{display:block}.plyr:not(.plyr--hide-controls) .plyr__controls:not(:empty)~.plyr__captions{transform:translateY(-40px);transform:translateY(calc(var(--plyr-control-spacing, 10px)*-4))}.plyr__caption{background:rgba(0,0,0,.8);background:var(--plyr-captions-background,rgba(0,0,0,.8));border-radius:2px;-webkit-box-decoration-break:clone;box-decoration-break:clone;color:#fff;color:var(--plyr-captions-text-color,#fff);line-height:185%;padding:.2em .5em;white-space:pre-wrap}.plyr__caption div{display:inline}.plyr__control{background:transparent;border:0;border-radius:3px;border-radius:var(--plyr-control-radius,3px);color:inherit;cursor:pointer;flex-shrink:0;overflow:visible;padding:7px;padding:calc(var(--plyr-control-spacing, 10px)*.7);position:relative;transition:all .3s ease}.plyr__control svg{fill:currentColor;display:block;height:18px;height:var(--plyr-control-icon-size,18px);pointer-events:none;width:18px;width:var(--plyr-control-icon-size,18px)}.plyr__control:focus{outline:0}.plyr__control.plyr__tab-focus{outline:3px dotted #00b2ff;outline:var(--plyr-tab-focus-color,var(--plyr-color-main,var(--plyr-color-main,#00b2ff))) dotted 3px;outline-offset:2px}a.plyr__control{text-decoration:none}.plyr__control.plyr__control--pressed .icon--not-pressed,.plyr__control.plyr__control--pressed .label--not-pressed,.plyr__control:not(.plyr__control--pressed) .icon--pressed,.plyr__control:not(.plyr__control--pressed) .label--pressed,a.plyr__control:after,a.plyr__control:before{display:none}.plyr--full-ui ::-webkit-media-controls{display:none}.plyr__controls{align-items:center;display:flex;justify-content:flex-end;text-align:center}.plyr__controls .plyr__progress__container{flex:1;min-width:0}.plyr__controls .plyr__controls__item{margin-left:2.5px;margin-left:calc(var(--plyr-control-spacing, 10px)/4)}.plyr__controls .plyr__controls__item:first-child{margin-left:0;margin-right:auto}.plyr__controls .plyr__controls__item.plyr__progress__container{padding-left:2.5px;padding-left:calc(var(--plyr-control-spacing, 10px)/4)}.plyr__controls .plyr__controls__item.plyr__time{padding:0 5px;padding:0 calc(var(--plyr-control-spacing, 10px)/2)}.plyr__controls .plyr__controls__item.plyr__progress__container:first-child,.plyr__controls .plyr__controls__item.plyr__time+.plyr__time,.plyr__controls .plyr__controls__item.plyr__time:first-child{padding-left:0}.plyr [data-plyr=airplay],.plyr [data-plyr=captions],.plyr [data-plyr=fullscreen],.plyr [data-plyr=pip],.plyr__controls:empty{display:none}.plyr--airplay-supported [data-plyr=airplay],.plyr--captions-enabled [data-plyr=captions],.plyr--fullscreen-enabled [data-plyr=fullscreen],.plyr--pip-supported [data-plyr=pip]{display:inline-block}.plyr__menu{display:flex;position:relative}.plyr__menu .plyr__control svg{transition:transform .3s ease}.plyr__menu .plyr__control[aria-expanded=true] svg{transform:rotate(90deg)}.plyr__menu .plyr__control[aria-expanded=true] .plyr__tooltip{display:none}.plyr__menu__container{animation:plyr-popup .2s ease;background:hsla(0,0%,100%,.9);background:var(--plyr-menu-background,hsla(0,0%,100%,.9));border-radius:4px;bottom:100%;box-shadow:0 1px 2px #00000026;box-shadow:var(--plyr-menu-shadow,0 1px 2px rgba(0,0,0,.15));color:#4a5464;color:var(--plyr-menu-color,#4a5464);font-size:15px;font-size:var(--plyr-font-size-base,15px);margin-bottom:10px;position:absolute;right:-3px;text-align:left;white-space:nowrap;z-index:3}.plyr__menu__container>div{overflow:hidden;transition:height .35s cubic-bezier(.4,0,.2,1),width .35s cubic-bezier(.4,0,.2,1)}.plyr__menu__container:after{border:4px solid transparent;border-top-color:#ffffffe6;border:var(--plyr-menu-arrow-size,4px) solid transparent;border-top-color:var(--plyr-menu-background,hsla(0,0%,100%,.9));content:"";height:0;position:absolute;right:14px;right:calc(var(--plyr-control-icon-size, 18px)/2 + var(--plyr-control-spacing, 10px)*.7 - var(--plyr-menu-arrow-size, 4px)/2);top:100%;width:0}.plyr__menu__container [role=menu]{padding:7px;padding:calc(var(--plyr-control-spacing, 10px)*.7)}.plyr__menu__container [role=menuitem],.plyr__menu__container [role=menuitemradio]{margin-top:2px}.plyr__menu__container [role=menuitem]:first-child,.plyr__menu__container [role=menuitemradio]:first-child{margin-top:0}.plyr__menu__container .plyr__control{align-items:center;color:#4a5464;color:var(--plyr-menu-color,#4a5464);display:flex;font-size:13px;font-size:var(--plyr-font-size-menu,var(--plyr-font-size-small,13px));padding:4.66667px 10.5px;padding:calc(var(--plyr-control-spacing, 10px)*.7/1.5) calc(var(--plyr-control-spacing, 10px)*.7*1.5);-webkit-user-select:none;user-select:none;width:100%}.plyr__menu__container .plyr__control>span{align-items:inherit;display:flex;width:100%}.plyr__menu__container .plyr__control:after{border:4px solid transparent;border:var(--plyr-menu-item-arrow-size,4px) solid transparent;content:"";position:absolute;top:50%;transform:translateY(-50%)}.plyr__menu__container .plyr__control--forward{padding-right:28px;padding-right:calc(var(--plyr-control-spacing, 10px)*.7*4)}.plyr__menu__container .plyr__control--forward:after{border-left-color:#728197;border-left-color:var(--plyr-menu-arrow-color,#728197);right:6.5px;right:calc(var(--plyr-control-spacing, 10px)*.7*1.5 - var(--plyr-menu-item-arrow-size, 4px))}.plyr__menu__container .plyr__control--forward.plyr__tab-focus:after,.plyr__menu__container .plyr__control--forward:hover:after{border-left-color:currentColor}.plyr__menu__container .plyr__control--back{font-weight:400;font-weight:var(--plyr-font-weight-regular,400);margin:7px;margin:calc(var(--plyr-control-spacing, 10px)*.7);margin-bottom:3.5px;margin-bottom:calc(var(--plyr-control-spacing, 10px)*.7/2);padding-left:28px;padding-left:calc(var(--plyr-control-spacing, 10px)*.7*4);position:relative;width:calc(100% - 14px);width:calc(100% - var(--plyr-control-spacing, 10px)*.7*2)}.plyr__menu__container .plyr__control--back:after{border-right-color:#728197;border-right-color:var(--plyr-menu-arrow-color,#728197);left:6.5px;left:calc(var(--plyr-control-spacing, 10px)*.7*1.5 - var(--plyr-menu-item-arrow-size, 4px))}.plyr__menu__container .plyr__control--back:before{background:#dcdfe5;background:var(--plyr-menu-back-border-color,#dcdfe5);box-shadow:0 1px #fff;box-shadow:0 1px 0 var(--plyr-menu-back-border-shadow-color,#fff);content:"";height:1px;left:0;margin-top:3.5px;margin-top:calc(var(--plyr-control-spacing, 10px)*.7/2);overflow:hidden;position:absolute;right:0;top:100%}.plyr__menu__container .plyr__control--back.plyr__tab-focus:after,.plyr__menu__container .plyr__control--back:hover:after{border-right-color:currentColor}.plyr__menu__container .plyr__control[role=menuitemradio]{padding-left:7px;padding-left:calc(var(--plyr-control-spacing, 10px)*.7)}.plyr__menu__container .plyr__control[role=menuitemradio]:after,.plyr__menu__container .plyr__control[role=menuitemradio]:before{border-radius:100%}.plyr__menu__container .plyr__control[role=menuitemradio]:before{background:rgba(0,0,0,.1);content:"";display:block;flex-shrink:0;height:16px;margin-right:10px;margin-right:var(--plyr-control-spacing,10px);transition:all .3s ease;width:16px}.plyr__menu__container .plyr__control[role=menuitemradio]:after{background:#fff;border:0;height:6px;left:12px;opacity:0;top:50%;transform:translateY(-50%) scale(0);transition:transform .3s ease,opacity .3s ease;width:6px}.plyr__menu__container .plyr__control[role=menuitemradio][aria-checked=true]:before{background:#00b2ff;background:var(--plyr-control-toggle-checked-background,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)))}.plyr__menu__container .plyr__control[role=menuitemradio][aria-checked=true]:after{opacity:1;transform:translateY(-50%) scale(1)}.plyr__menu__container .plyr__control[role=menuitemradio].plyr__tab-focus:before,.plyr__menu__container .plyr__control[role=menuitemradio]:hover:before{background:rgba(35,40,47,.1)}.plyr__menu__container .plyr__menu__value{align-items:center;display:flex;margin-left:auto;margin-right:calc(-7px + 2);margin-right:calc(var(--plyr-control-spacing, 10px)*.7*-1 - -2);overflow:hidden;padding-left:24.5px;padding-left:calc(var(--plyr-control-spacing, 10px)*.7*3.5);pointer-events:none}.plyr--full-ui input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;border:0;border-radius:26px;border-radius:calc(var(--plyr-range-thumb-height, 13px)*2);color:#00b2ff;color:var(--plyr-range-fill-background,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));display:block;height:19px;height:calc(var(--plyr-range-thumb-active-shadow-width, 3px)*2 + var(--plyr-range-thumb-height, 13px));margin:0;min-width:0;padding:0;transition:box-shadow .3s ease;width:100%}.plyr--full-ui input[type=range]::-webkit-slider-runnable-track{background:transparent;background-image:linear-gradient(90deg,currentColor 0,transparent 0);background-image:linear-gradient(to right,currentColor var(--value,0),transparent var(--value,0));border:0;border-radius:2.5px;border-radius:calc(var(--plyr-range-track-height, 5px)/2);height:5px;height:var(--plyr-range-track-height,5px);-webkit-transition:box-shadow .3s ease;transition:box-shadow .3s ease;-webkit-user-select:none;user-select:none}.plyr--full-ui input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;background:#fff;background:var(--plyr-range-thumb-background,#fff);border:0;border-radius:100%;box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px rgba(35,40,47,.15),0 0 0 1px rgba(35,40,47,.2));height:13px;height:var(--plyr-range-thumb-height,13px);margin-top:-4px;margin-top:calc((var(--plyr-range-thumb-height, 13px) - var(--plyr-range-track-height, 5px))/2*-1);position:relative;-webkit-transition:all .2s ease;transition:all .2s ease;width:13px;width:var(--plyr-range-thumb-height,13px)}.plyr--full-ui input[type=range]::-moz-range-track{background:transparent;border:0;border-radius:2.5px;border-radius:calc(var(--plyr-range-track-height, 5px)/2);height:5px;height:var(--plyr-range-track-height,5px);-moz-transition:box-shadow .3s ease;transition:box-shadow .3s ease;user-select:none}.plyr--full-ui input[type=range]::-moz-range-thumb{background:#fff;background:var(--plyr-range-thumb-background,#fff);border:0;border-radius:100%;box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px rgba(35,40,47,.15),0 0 0 1px rgba(35,40,47,.2));height:13px;height:var(--plyr-range-thumb-height,13px);position:relative;-moz-transition:all .2s ease;transition:all .2s ease;width:13px;width:var(--plyr-range-thumb-height,13px)}.plyr--full-ui input[type=range]::-moz-range-progress{background:currentColor;border-radius:2.5px;border-radius:calc(var(--plyr-range-track-height, 5px)/2);height:5px;height:var(--plyr-range-track-height,5px)}.plyr--full-ui input[type=range]::-ms-track{color:transparent}.plyr--full-ui input[type=range]::-ms-fill-upper,.plyr--full-ui input[type=range]::-ms-track{background:transparent;border:0;border-radius:2.5px;border-radius:calc(var(--plyr-range-track-height, 5px)/2);height:5px;height:var(--plyr-range-track-height,5px);-ms-transition:box-shadow .3s ease;transition:box-shadow .3s ease;user-select:none}.plyr--full-ui input[type=range]::-ms-fill-lower{background:transparent;background:currentColor;border:0;border-radius:2.5px;border-radius:calc(var(--plyr-range-track-height, 5px)/2);height:5px;height:var(--plyr-range-track-height,5px);-ms-transition:box-shadow .3s ease;transition:box-shadow .3s ease;user-select:none}.plyr--full-ui input[type=range]::-ms-thumb{background:#fff;background:var(--plyr-range-thumb-background,#fff);border:0;border-radius:100%;box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px rgba(35,40,47,.15),0 0 0 1px rgba(35,40,47,.2));height:13px;height:var(--plyr-range-thumb-height,13px);margin-top:0;position:relative;-ms-transition:all .2s ease;transition:all .2s ease;width:13px;width:var(--plyr-range-thumb-height,13px)}.plyr--full-ui input[type=range]::-ms-tooltip{display:none}.plyr--full-ui input[type=range]::-moz-focus-outer{border:0}.plyr--full-ui input[type=range]:focus{outline:0}.plyr--full-ui input[type=range].plyr__tab-focus::-webkit-slider-runnable-track{outline:3px dotted #00b2ff;outline:var(--plyr-tab-focus-color,var(--plyr-color-main,var(--plyr-color-main,#00b2ff))) dotted 3px;outline-offset:2px}.plyr--full-ui input[type=range].plyr__tab-focus::-moz-range-track{outline:3px dotted #00b2ff;outline:var(--plyr-tab-focus-color,var(--plyr-color-main,var(--plyr-color-main,#00b2ff))) dotted 3px;outline-offset:2px}.plyr--full-ui input[type=range].plyr__tab-focus::-ms-track{outline:3px dotted #00b2ff;outline:var(--plyr-tab-focus-color,var(--plyr-color-main,var(--plyr-color-main,#00b2ff))) dotted 3px;outline-offset:2px}.plyr__poster{background-color:#000;background-color:var(--plyr-video-background,var(--plyr-video-background,#000));background-position:50% 50%;background-repeat:no-repeat;background-size:contain;height:100%;left:0;opacity:0;position:absolute;top:0;transition:opacity .2s ease;width:100%;z-index:1}.plyr--stopped.plyr__poster-enabled .plyr__poster{opacity:1}.plyr--youtube.plyr--paused.plyr__poster-enabled:not(.plyr--stopped) .plyr__poster{display:none}.plyr__time{font-size:13px;font-size:var(--plyr-font-size-time,var(--plyr-font-size-small,13px))}.plyr__time+.plyr__time:before{content:"\\2044";margin-right:10px;margin-right:var(--plyr-control-spacing,10px)}@media (max-width:767px){.plyr__time+.plyr__time{display:none}}.plyr__tooltip{background:hsla(0,0%,100%,.9);background:var(--plyr-tooltip-background,hsla(0,0%,100%,.9));border-radius:5px;border-radius:var(--plyr-tooltip-radius,5px);bottom:100%;box-shadow:0 1px 2px #00000026;box-shadow:var(--plyr-tooltip-shadow,0 1px 2px rgba(0,0,0,.15));color:#4a5464;color:var(--plyr-tooltip-color,#4a5464);font-size:13px;font-size:var(--plyr-font-size-small,13px);font-weight:400;font-weight:var(--plyr-font-weight-regular,400);left:50%;line-height:1.3;margin-bottom:10px;margin-bottom:calc(var(--plyr-control-spacing, 10px)/2*2);opacity:0;padding:5px 7.5px;padding:calc(var(--plyr-control-spacing, 10px)/2) calc(var(--plyr-control-spacing, 10px)/2*1.5);pointer-events:none;position:absolute;transform:translate(-50%,10px) scale(.8);transform-origin:50% 100%;transition:transform .2s ease .1s,opacity .2s ease .1s;white-space:nowrap;z-index:2}.plyr__tooltip:before{border-left:4px solid transparent;border-left:var(--plyr-tooltip-arrow-size,4px) solid transparent;border-right:4px solid transparent;border-right:var(--plyr-tooltip-arrow-size,4px) solid transparent;border-top:4px solid hsla(0,0%,100%,.9);border-top:var(--plyr-tooltip-arrow-size,4px) solid var(--plyr-tooltip-background,hsla(0,0%,100%,.9));bottom:-4px;bottom:calc(var(--plyr-tooltip-arrow-size, 4px)*-1);content:"";height:0;left:50%;position:absolute;transform:translate(-50%);width:0;z-index:2}.plyr .plyr__control.plyr__tab-focus .plyr__tooltip,.plyr .plyr__control:hover .plyr__tooltip,.plyr__tooltip--visible{opacity:1;transform:translate(-50%) scale(1)}.plyr .plyr__control:hover .plyr__tooltip{z-index:3}.plyr__controls>.plyr__control:first-child .plyr__tooltip,.plyr__controls>.plyr__control:first-child+.plyr__control .plyr__tooltip{left:0;transform:translateY(10px) scale(.8);transform-origin:0 100%}.plyr__controls>.plyr__control:first-child .plyr__tooltip:before,.plyr__controls>.plyr__control:first-child+.plyr__control .plyr__tooltip:before{left:16px;left:calc(var(--plyr-control-icon-size, 18px)/2 + var(--plyr-control-spacing, 10px)*.7)}.plyr__controls>.plyr__control:last-child .plyr__tooltip{left:auto;right:0;transform:translateY(10px) scale(.8);transform-origin:100% 100%}.plyr__controls>.plyr__control:last-child .plyr__tooltip:before{left:auto;right:16px;right:calc(var(--plyr-control-icon-size, 18px)/2 + var(--plyr-control-spacing, 10px)*.7);transform:translate(50%)}.plyr__controls>.plyr__control:first-child .plyr__tooltip--visible,.plyr__controls>.plyr__control:first-child+.plyr__control .plyr__tooltip--visible,.plyr__controls>.plyr__control:first-child+.plyr__control.plyr__tab-focus .plyr__tooltip,.plyr__controls>.plyr__control:first-child+.plyr__control:hover .plyr__tooltip,.plyr__controls>.plyr__control:first-child.plyr__tab-focus .plyr__tooltip,.plyr__controls>.plyr__control:first-child:hover .plyr__tooltip,.plyr__controls>.plyr__control:last-child .plyr__tooltip--visible,.plyr__controls>.plyr__control:last-child.plyr__tab-focus .plyr__tooltip,.plyr__controls>.plyr__control:last-child:hover .plyr__tooltip{transform:translate(0) scale(1)}.plyr__progress{left:6.5px;left:calc(var(--plyr-range-thumb-height, 13px)*.5);margin-right:13px;margin-right:var(--plyr-range-thumb-height,13px);position:relative}.plyr__progress input[type=range],.plyr__progress__buffer{margin-left:-6.5px;margin-left:calc(var(--plyr-range-thumb-height, 13px)*-.5);margin-right:-6.5px;margin-right:calc(var(--plyr-range-thumb-height, 13px)*-.5);width:calc(100% + 13px);width:calc(100% + var(--plyr-range-thumb-height, 13px))}.plyr__progress input[type=range]{position:relative;z-index:2}.plyr__progress .plyr__tooltip{left:0;max-width:120px;overflow-wrap:break-word;white-space:normal}.plyr__progress__buffer{-webkit-appearance:none;background:transparent;border:0;border-radius:100px;height:5px;height:var(--plyr-range-track-height,5px);left:0;margin-top:-2.5px;margin-top:calc((var(--plyr-range-track-height, 5px)/2)*-1);padding:0;position:absolute;top:50%}.plyr__progress__buffer::-webkit-progress-bar{background:transparent}.plyr__progress__buffer::-webkit-progress-value{background:currentColor;border-radius:100px;min-width:5px;min-width:var(--plyr-range-track-height,5px);-webkit-transition:width .2s ease;transition:width .2s ease}.plyr__progress__buffer::-moz-progress-bar{background:currentColor;border-radius:100px;min-width:5px;min-width:var(--plyr-range-track-height,5px);-moz-transition:width .2s ease;transition:width .2s ease}.plyr__progress__buffer::-ms-fill{border-radius:100px;-ms-transition:width .2s ease;transition:width .2s ease}.plyr--loading .plyr__progress__buffer{animation:plyr-progress 1s linear infinite;background-image:linear-gradient(-45deg,rgba(35,40,47,.6) 25%,transparent 0,transparent 50%,rgba(35,40,47,.6) 0,rgba(35,40,47,.6) 75%,transparent 0,transparent);background-image:linear-gradient(-45deg,var(--plyr-progress-loading-background,rgba(35,40,47,.6)) 25%,transparent 25%,transparent 50%,var(--plyr-progress-loading-background,rgba(35,40,47,.6)) 50%,var(--plyr-progress-loading-background,rgba(35,40,47,.6)) 75%,transparent 75%,transparent);background-repeat:repeat-x;background-size:25px 25px;background-size:var(--plyr-progress-loading-size,25px) var(--plyr-progress-loading-size,25px);color:transparent}.plyr--video.plyr--loading .plyr__progress__buffer{background-color:#ffffff40;background-color:var(--plyr-video-progress-buffered-background,hsla(0,0%,100%,.25))}.plyr--audio.plyr--loading .plyr__progress__buffer{background-color:#c1c8d199;background-color:var(--plyr-audio-progress-buffered-background,rgba(193,200,209,.6))}.plyr__progress__marker{background-color:#fff;background-color:var(--plyr-progress-marker-background,#fff);border-radius:1px;height:5px;height:var(--plyr-range-track-height,5px);position:absolute;top:50%;transform:translate(-50%,-50%);width:3px;width:var(--plyr-progress-marker-width,3px);z-index:3}.plyr__volume{align-items:center;display:flex;max-width:110px;min-width:80px;position:relative;width:20%}.plyr__volume input[type=range]{margin-left:5px;margin-left:calc(var(--plyr-control-spacing, 10px)/2);margin-right:5px;margin-right:calc(var(--plyr-control-spacing, 10px)/2);position:relative;z-index:2}.plyr--is-ios .plyr__volume{min-width:0;width:auto}.plyr--audio{display:block}.plyr--audio .plyr__controls{background:#fff;background:var(--plyr-audio-controls-background,#fff);border-radius:inherit;color:#4a5464;color:var(--plyr-audio-control-color,#4a5464);padding:10px;padding:var(--plyr-control-spacing,10px)}.plyr--audio .plyr__control.plyr__tab-focus,.plyr--audio .plyr__control:hover,.plyr--audio .plyr__control[aria-expanded=true]{background:#00b2ff;background:var(--plyr-audio-control-background-hover,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));color:#fff;color:var(--plyr-audio-control-color-hover,#fff)}.plyr--full-ui.plyr--audio input[type=range]::-webkit-slider-runnable-track{background-color:#c1c8d199;background-color:var(--plyr-audio-range-track-background,var(--plyr-audio-progress-buffered-background,rgba(193,200,209,.6)))}.plyr--full-ui.plyr--audio input[type=range]::-moz-range-track{background-color:#c1c8d199;background-color:var(--plyr-audio-range-track-background,var(--plyr-audio-progress-buffered-background,rgba(193,200,209,.6)))}.plyr--full-ui.plyr--audio input[type=range]::-ms-track{background-color:#c1c8d199;background-color:var(--plyr-audio-range-track-background,var(--plyr-audio-progress-buffered-background,rgba(193,200,209,.6)))}.plyr--full-ui.plyr--audio input[type=range]:active::-webkit-slider-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #23282f1a;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px rgba(35,40,47,.15),0 0 0 1px rgba(35,40,47,.2)),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,rgba(35,40,47,.1))}.plyr--full-ui.plyr--audio input[type=range]:active::-moz-range-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #23282f1a;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px rgba(35,40,47,.15),0 0 0 1px rgba(35,40,47,.2)),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,rgba(35,40,47,.1))}.plyr--full-ui.plyr--audio input[type=range]:active::-ms-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #23282f1a;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px rgba(35,40,47,.15),0 0 0 1px rgba(35,40,47,.2)),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,rgba(35,40,47,.1))}.plyr--audio .plyr__progress__buffer{color:#c1c8d199;color:var(--plyr-audio-progress-buffered-background,rgba(193,200,209,.6))}.plyr--video{background:#000;background:var(--plyr-video-background,var(--plyr-video-background,#000));overflow:hidden}.plyr--video.plyr--menu-open{overflow:visible}.plyr__video-wrapper{background:#000;background:var(--plyr-video-background,var(--plyr-video-background,#000));height:100%;margin:auto;overflow:hidden;position:relative;width:100%}.plyr__video-embed,.plyr__video-wrapper--fixed-ratio{aspect-ratio:16/9}@supports not (aspect-ratio:16/9){.plyr__video-embed,.plyr__video-wrapper--fixed-ratio{height:0;padding-bottom:56.25%;position:relative}}.plyr__video-embed iframe,.plyr__video-wrapper--fixed-ratio video{border:0;height:100%;left:0;position:absolute;top:0;width:100%}.plyr--full-ui .plyr__video-embed>.plyr__video-embed__container{padding-bottom:240%;position:relative;transform:translateY(-38.28125%)}.plyr--video .plyr__controls{background:linear-gradient(transparent,rgba(0,0,0,.75));background:var(--plyr-video-controls-background,linear-gradient(transparent,rgba(0,0,0,.75)));border-bottom-left-radius:inherit;border-bottom-right-radius:inherit;bottom:0;color:#fff;color:var(--plyr-video-control-color,#fff);left:0;padding:5px;padding:calc(var(--plyr-control-spacing, 10px)/2);padding-top:20px;padding-top:calc(var(--plyr-control-spacing, 10px)*2);position:absolute;right:0;transition:opacity .4s ease-in-out,transform .4s ease-in-out;z-index:3}@media (min-width:480px){.plyr--video .plyr__controls{padding:10px;padding:var(--plyr-control-spacing,10px);padding-top:35px;padding-top:calc(var(--plyr-control-spacing, 10px)*3.5)}}.plyr--video.plyr--hide-controls .plyr__controls{opacity:0;pointer-events:none;transform:translateY(100%)}.plyr--video .plyr__control.plyr__tab-focus,.plyr--video .plyr__control:hover,.plyr--video .plyr__control[aria-expanded=true]{background:#00b2ff;background:var(--plyr-video-control-background-hover,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));color:#fff;color:var(--plyr-video-control-color-hover,#fff)}.plyr__control--overlaid{background:#00b2ff;background:var(--plyr-video-control-background-hover,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));border:0;border-radius:100%;color:#fff;color:var(--plyr-video-control-color,#fff);display:none;left:50%;opacity:.9;padding:15px;padding:calc(var(--plyr-control-spacing, 10px)*1.5);position:absolute;top:50%;transform:translate(-50%,-50%);transition:.3s;z-index:2}.plyr__control--overlaid svg{left:2px;position:relative}.plyr__control--overlaid:focus,.plyr__control--overlaid:hover{opacity:1}.plyr--playing .plyr__control--overlaid{opacity:0;visibility:hidden}.plyr--full-ui.plyr--video .plyr__control--overlaid{display:block}.plyr--full-ui.plyr--video input[type=range]::-webkit-slider-runnable-track{background-color:#ffffff40;background-color:var(--plyr-video-range-track-background,var(--plyr-video-progress-buffered-background,hsla(0,0%,100%,.25)))}.plyr--full-ui.plyr--video input[type=range]::-moz-range-track{background-color:#ffffff40;background-color:var(--plyr-video-range-track-background,var(--plyr-video-progress-buffered-background,hsla(0,0%,100%,.25)))}.plyr--full-ui.plyr--video input[type=range]::-ms-track{background-color:#ffffff40;background-color:var(--plyr-video-range-track-background,var(--plyr-video-progress-buffered-background,hsla(0,0%,100%,.25)))}.plyr--full-ui.plyr--video input[type=range]:active::-webkit-slider-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #ffffff80;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px rgba(35,40,47,.15),0 0 0 1px rgba(35,40,47,.2)),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,hsla(0,0%,100%,.5))}.plyr--full-ui.plyr--video input[type=range]:active::-moz-range-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #ffffff80;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px rgba(35,40,47,.15),0 0 0 1px rgba(35,40,47,.2)),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,hsla(0,0%,100%,.5))}.plyr--full-ui.plyr--video input[type=range]:active::-ms-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #ffffff80;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px rgba(35,40,47,.15),0 0 0 1px rgba(35,40,47,.2)),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,hsla(0,0%,100%,.5))}.plyr--video .plyr__progress__buffer{color:#ffffff40;color:var(--plyr-video-progress-buffered-background,hsla(0,0%,100%,.25))}.plyr:fullscreen{background:#000;border-radius:0!important;height:100%;margin:0;width:100%}.plyr:fullscreen video{height:100%}.plyr:fullscreen .plyr__control .icon--exit-fullscreen{display:block}.plyr:fullscreen .plyr__control .icon--exit-fullscreen+svg{display:none}.plyr:fullscreen.plyr--hide-controls{cursor:none}@media (min-width:1024px){.plyr:fullscreen .plyr__captions{font-size:21px;font-size:var(--plyr-font-size-xlarge,21px)}}.plyr--fullscreen-fallback{background:#000;border-radius:0!important;bottom:0;display:block;height:100%;left:0;margin:0;position:fixed;right:0;top:0;width:100%;z-index:10000000}.plyr--fullscreen-fallback video{height:100%}.plyr--fullscreen-fallback .plyr__control .icon--exit-fullscreen{display:block}.plyr--fullscreen-fallback .plyr__control .icon--exit-fullscreen+svg{display:none}.plyr--fullscreen-fallback.plyr--hide-controls{cursor:none}@media (min-width:1024px){.plyr--fullscreen-fallback .plyr__captions{font-size:21px;font-size:var(--plyr-font-size-xlarge,21px)}}.plyr__ads{border-radius:inherit;bottom:0;cursor:pointer;left:0;overflow:hidden;position:absolute;right:0;top:0;z-index:-1}.plyr__ads>div,.plyr__ads>div iframe{height:100%;position:absolute;width:100%}.plyr__ads:after{background:#23282f;border-radius:2px;bottom:10px;bottom:var(--plyr-control-spacing,10px);color:#fff;content:attr(data-badge-text);font-size:11px;padding:2px 6px;pointer-events:none;position:absolute;right:10px;right:var(--plyr-control-spacing,10px);z-index:3}.plyr__ads:empty:after{display:none}.plyr__cues{background:currentColor;display:block;height:5px;height:var(--plyr-range-track-height,5px);left:0;opacity:.8;position:absolute;top:50%;transform:translateY(-50%);width:3px;z-index:3}.plyr__preview-thumb{background-color:#ffffffe6;background-color:var(--plyr-tooltip-background,hsla(0,0%,100%,.9));border-radius:5px;border-radius:var(--plyr-tooltip-radius,5px);bottom:100%;box-shadow:0 1px 2px #00000026;box-shadow:var(--plyr-tooltip-shadow,0 1px 2px rgba(0,0,0,.15));margin-bottom:10px;margin-bottom:calc(var(--plyr-control-spacing, 10px)/2*2);opacity:0;padding:3px;pointer-events:none;position:absolute;transform:translateY(10px) scale(.8);transform-origin:50% 100%;transition:transform .2s ease .1s,opacity .2s ease .1s;z-index:2}.plyr__preview-thumb--is-shown{opacity:1;transform:translate(0) scale(1)}.plyr__preview-thumb:before{border-left:4px solid transparent;border-left:var(--plyr-tooltip-arrow-size,4px) solid transparent;border-right:4px solid transparent;border-right:var(--plyr-tooltip-arrow-size,4px) solid transparent;border-top:4px solid hsla(0,0%,100%,.9);border-top:var(--plyr-tooltip-arrow-size,4px) solid var(--plyr-tooltip-background,hsla(0,0%,100%,.9));bottom:-4px;bottom:calc(var(--plyr-tooltip-arrow-size, 4px)*-1);content:"";height:0;left:calc(50% + var(--preview-arrow-offset));position:absolute;transform:translate(-50%);width:0;z-index:2}.plyr__preview-thumb__image-container{background:#c1c8d1;border-radius:4px;border-radius:calc(var(--plyr-tooltip-radius, 5px) - 1px);overflow:hidden;position:relative;z-index:0}.plyr__preview-thumb__image-container img,.plyr__preview-thumb__image-container:after{height:100%;left:0;position:absolute;top:0;width:100%}.plyr__preview-thumb__image-container:after{border-radius:inherit;box-shadow:inset 0 0 0 1px #00000026;content:"";pointer-events:none}.plyr__preview-thumb__image-container img{max-height:none;max-width:none}.plyr__preview-thumb__time-container{background:linear-gradient(transparent,rgba(0,0,0,.75));background:var(--plyr-video-controls-background,linear-gradient(transparent,rgba(0,0,0,.75)));border-bottom-left-radius:4px;border-bottom-left-radius:calc(var(--plyr-tooltip-radius, 5px) - 1px);border-bottom-right-radius:4px;border-bottom-right-radius:calc(var(--plyr-tooltip-radius, 5px) - 1px);bottom:0;left:0;line-height:1.1;padding:20px 6px 6px;position:absolute;right:0;z-index:3}.plyr__preview-thumb__time-container span{color:#fff;font-size:13px;font-size:var(--plyr-font-size-time,var(--plyr-font-size-small,13px))}.plyr__preview-scrubbing{bottom:0;filter:blur(1px);height:100%;left:0;margin:auto;opacity:0;overflow:hidden;pointer-events:none;position:absolute;right:0;top:0;transition:opacity .3s ease;width:100%;z-index:1}.plyr__preview-scrubbing--is-shown{opacity:1}.plyr__preview-scrubbing img{height:100%;left:0;max-height:none;max-width:none;-o-object-fit:contain;object-fit:contain;position:absolute;top:0;width:100%}.plyr--no-transition{transition:none!important}.plyr__sr-only{clip:rect(1px,1px,1px,1px);border:0!important;height:1px!important;overflow:hidden;padding:0!important;position:absolute!important;width:1px!important}.plyr [hidden]{display:none!important}.plyr--video{width:100%;height:100%}.plyr--audio-wrp{width:100%;height:100%;display:flex;align-items:center}.plyr--audio{width:120%;height:100%;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-end;background-color:none;--plyr-audio-controls-background: rgba(0, 0, 0, .5);--plyr-audio-control-color: #fff;border-radius:12px}.plyr__close img{width:24px;height:24px}.telebox-color-scheme-dark .plyr--audio{color-scheme:dark;background-color:#121212;--plyr-audio-controls-background: #121212;--plyr-audio-control-color: #eee}.disbale-progress .plyr__progress,.disbale-progress .plyr__volume,.disbale-progress.plyr__progress,.disbale-progress.plyr__volume,.is-mobile .plyr__progress,.is-mobile .plyr__volume{pointer-events:none}.is-mobile .plyr__control{display:none}.app-plyr-loading{display:flex;justify-content:center;align-items:center;width:100%;height:100%;position:absolute;top:0;left:0;z-index:100;background:white}.app-plyr-loader{border:4px solid rgb(57,171,255);border-left-color:transparent;width:36px;height:36px;animation:spin 1s linear infinite;border-radius:100%}@keyframes spin{0%{transform:rotate(0)}to{transform:rotate(360deg)}}\n')();
+var styles = '@charset "UTF-8";@keyframes plyr-progress{to{background-position:25px 0;background-position:var(--plyr-progress-loading-size,25px) 0}}@keyframes plyr-popup{0%{opacity:.5;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes plyr-fade-in{0%{opacity:0}to{opacity:1}}.plyr{-moz-osx-font-smoothing:grayscale;-webkit-font-smoothing:antialiased;align-items:center;direction:ltr;display:flex;flex-direction:column;font-family:inherit;font-family:var(--plyr-font-family,inherit);font-variant-numeric:tabular-nums;font-weight:400;font-weight:var(--plyr-font-weight-regular,400);line-height:1.7;line-height:var(--plyr-line-height,1.7);max-width:100%;min-width:200px;position:relative;text-shadow:none;transition:box-shadow .3s ease;z-index:0}.plyr audio,.plyr iframe,.plyr video{display:block;height:100%;width:100%}.plyr button{font:inherit;line-height:inherit;width:auto}.plyr:focus{outline:0}.plyr--full-ui{box-sizing:border-box}.plyr--full-ui *,.plyr--full-ui :after,.plyr--full-ui :before{box-sizing:inherit}.plyr--full-ui a,.plyr--full-ui button,.plyr--full-ui input,.plyr--full-ui label{touch-action:manipulation}.plyr__badge{background:#4a5464;background:var(--plyr-badge-background,#4a5464);border-radius:2px;border-radius:var(--plyr-badge-border-radius,2px);color:#fff;color:var(--plyr-badge-text-color,#fff);font-size:9px;font-size:var(--plyr-font-size-badge,9px);line-height:1;padding:3px 4px}.plyr--full-ui ::-webkit-media-text-track-container{display:none}.plyr__captions{animation:plyr-fade-in .3s ease;bottom:0;display:none;font-size:13px;font-size:var(--plyr-font-size-small,13px);left:0;padding:10px;padding:var(--plyr-control-spacing,10px);position:absolute;text-align:center;transition:transform .4s ease-in-out;width:100%}.plyr__captions span:empty{display:none}@media (min-width:480px){.plyr__captions{font-size:15px;font-size:var(--plyr-font-size-base,15px);padding:20px;padding:calc(var(--plyr-control-spacing, 10px)*2)}}@media (min-width:768px){.plyr__captions{font-size:18px;font-size:var(--plyr-font-size-large,18px)}}.plyr--captions-active .plyr__captions{display:block}.plyr:not(.plyr--hide-controls) .plyr__controls:not(:empty)~.plyr__captions{transform:translateY(-40px);transform:translateY(calc(var(--plyr-control-spacing, 10px)*-4))}.plyr__caption{background:#000c;background:var(--plyr-captions-background,#000c);border-radius:2px;-webkit-box-decoration-break:clone;box-decoration-break:clone;color:#fff;color:var(--plyr-captions-text-color,#fff);line-height:185%;padding:.2em .5em;white-space:pre-wrap}.plyr__caption div{display:inline}.plyr__control{background:#0000;border:0;border-radius:4px;border-radius:var(--plyr-control-radius,4px);color:inherit;cursor:pointer;flex-shrink:0;overflow:visible;padding:7px;padding:calc(var(--plyr-control-spacing, 10px)*.7);position:relative;transition:all .3s ease}.plyr__control svg{fill:currentColor;display:block;height:18px;height:var(--plyr-control-icon-size,18px);pointer-events:none;width:18px;width:var(--plyr-control-icon-size,18px)}.plyr__control:focus{outline:0}.plyr__control:focus-visible{outline:2px dashed #00b2ff;outline:2px dashed var(--plyr-focus-visible-color,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));outline-offset:2px}a.plyr__control{text-decoration:none}.plyr__control.plyr__control--pressed .icon--not-pressed,.plyr__control.plyr__control--pressed .label--not-pressed,.plyr__control:not(.plyr__control--pressed) .icon--pressed,.plyr__control:not(.plyr__control--pressed) .label--pressed,a.plyr__control:after,a.plyr__control:before{display:none}.plyr--full-ui ::-webkit-media-controls{display:none}.plyr__controls{align-items:center;display:flex;justify-content:flex-end;text-align:center}.plyr__controls .plyr__progress__container{flex:1;min-width:0}.plyr__controls .plyr__controls__item{margin-left:2.5px;margin-left:calc(var(--plyr-control-spacing, 10px)/4)}.plyr__controls .plyr__controls__item:first-child{margin-left:0;margin-right:auto}.plyr__controls .plyr__controls__item.plyr__progress__container{padding-left:2.5px;padding-left:calc(var(--plyr-control-spacing, 10px)/4)}.plyr__controls .plyr__controls__item.plyr__time{padding:0 5px;padding:0 calc(var(--plyr-control-spacing, 10px)/2)}.plyr__controls .plyr__controls__item.plyr__progress__container:first-child,.plyr__controls .plyr__controls__item.plyr__time+.plyr__time,.plyr__controls .plyr__controls__item.plyr__time:first-child{padding-left:0}.plyr [data-plyr=airplay],.plyr [data-plyr=captions],.plyr [data-plyr=fullscreen],.plyr [data-plyr=pip],.plyr__controls:empty{display:none}.plyr--airplay-supported [data-plyr=airplay],.plyr--captions-enabled [data-plyr=captions],.plyr--fullscreen-enabled [data-plyr=fullscreen],.plyr--pip-supported [data-plyr=pip]{display:inline-block}.plyr__menu{display:flex;position:relative}.plyr__menu .plyr__control svg{transition:transform .3s ease}.plyr__menu .plyr__control[aria-expanded=true] svg{transform:rotate(90deg)}.plyr__menu .plyr__control[aria-expanded=true] .plyr__tooltip{display:none}.plyr__menu__container{animation:plyr-popup .2s ease;background:#ffffffe6;background:var(--plyr-menu-background,#ffffffe6);border-radius:8px;border-radius:var(--plyr-menu-radius,8px);bottom:100%;box-shadow:0 1px 2px #00000026;box-shadow:var(--plyr-menu-shadow,0 1px 2px #00000026);color:#4a5464;color:var(--plyr-menu-color,#4a5464);font-size:15px;font-size:var(--plyr-font-size-base,15px);margin-bottom:10px;position:absolute;right:-3px;text-align:left;white-space:nowrap;z-index:3}.plyr__menu__container>div{overflow:hidden;transition:height .35s cubic-bezier(.4,0,.2,1),width .35s cubic-bezier(.4,0,.2,1)}.plyr__menu__container:after{border:4px solid #0000;border-top-color:#ffffffe6;border:var(--plyr-menu-arrow-size,4px) solid #0000;border-top-color:var(--plyr-menu-background,#ffffffe6);content:"";height:0;position:absolute;right:14px;right:calc(var(--plyr-control-icon-size, 18px)/2 + var(--plyr-control-spacing, 10px)*.7 - var(--plyr-menu-arrow-size, 4px)/2);top:100%;width:0}.plyr__menu__container [role=menu]{padding:7px;padding:calc(var(--plyr-control-spacing, 10px)*.7)}.plyr__menu__container [role=menuitem],.plyr__menu__container [role=menuitemradio]{margin-top:2px}.plyr__menu__container [role=menuitem]:first-child,.plyr__menu__container [role=menuitemradio]:first-child{margin-top:0}.plyr__menu__container .plyr__control{align-items:center;color:#4a5464;color:var(--plyr-menu-color,#4a5464);display:flex;font-size:13px;font-size:var(--plyr-font-size-menu,var(--plyr-font-size-small,13px));padding:4.66667px 10.5px;padding:calc(var(--plyr-control-spacing, 10px)*.7/1.5) calc(var(--plyr-control-spacing, 10px)*.7*1.5);-webkit-user-select:none;user-select:none;width:100%}.plyr__menu__container .plyr__control>span{align-items:inherit;display:flex;width:100%}.plyr__menu__container .plyr__control:after{border:4px solid #0000;border:var(--plyr-menu-item-arrow-size,4px) solid #0000;content:"";position:absolute;top:50%;transform:translateY(-50%)}.plyr__menu__container .plyr__control--forward{padding-right:28px;padding-right:calc(var(--plyr-control-spacing, 10px)*.7*4)}.plyr__menu__container .plyr__control--forward:after{border-left-color:#728197;border-left-color:var(--plyr-menu-arrow-color,#728197);right:6.5px;right:calc(var(--plyr-control-spacing, 10px)*.7*1.5 - var(--plyr-menu-item-arrow-size, 4px))}.plyr__menu__container .plyr__control--forward:focus-visible:after,.plyr__menu__container .plyr__control--forward:hover:after{border-left-color:initial}.plyr__menu__container .plyr__control--back{font-weight:400;font-weight:var(--plyr-font-weight-regular,400);margin:7px;margin:calc(var(--plyr-control-spacing, 10px)*.7);margin-bottom:3.5px;margin-bottom:calc(var(--plyr-control-spacing, 10px)*.7/2);padding-left:28px;padding-left:calc(var(--plyr-control-spacing, 10px)*.7*4);position:relative;width:calc(100% - 14px);width:calc(100% - var(--plyr-control-spacing, 10px)*.7*2)}.plyr__menu__container .plyr__control--back:after{border-right-color:#728197;border-right-color:var(--plyr-menu-arrow-color,#728197);left:6.5px;left:calc(var(--plyr-control-spacing, 10px)*.7*1.5 - var(--plyr-menu-item-arrow-size, 4px))}.plyr__menu__container .plyr__control--back:before{background:#dcdfe5;background:var(--plyr-menu-back-border-color,#dcdfe5);box-shadow:0 1px #fff;box-shadow:0 1px 0 var(--plyr-menu-back-border-shadow-color,#fff);content:"";height:1px;left:0;margin-top:3.5px;margin-top:calc(var(--plyr-control-spacing, 10px)*.7/2);overflow:hidden;position:absolute;right:0;top:100%}.plyr__menu__container .plyr__control--back:focus-visible:after,.plyr__menu__container .plyr__control--back:hover:after{border-right-color:initial}.plyr__menu__container .plyr__control[role=menuitemradio]{padding-left:7px;padding-left:calc(var(--plyr-control-spacing, 10px)*.7)}.plyr__menu__container .plyr__control[role=menuitemradio]:after,.plyr__menu__container .plyr__control[role=menuitemradio]:before{border-radius:100%}.plyr__menu__container .plyr__control[role=menuitemradio]:before{background:#0000001a;content:"";display:block;flex-shrink:0;height:16px;margin-right:10px;margin-right:var(--plyr-control-spacing,10px);transition:all .3s ease;width:16px}.plyr__menu__container .plyr__control[role=menuitemradio]:after{background:#fff;border:0;height:6px;left:12px;opacity:0;top:50%;transform:translateY(-50%) scale(0);transition:transform .3s ease,opacity .3s ease;width:6px}.plyr__menu__container .plyr__control[role=menuitemradio][aria-checked=true]:before{background:#00b2ff;background:var(--plyr-control-toggle-checked-background,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)))}.plyr__menu__container .plyr__control[role=menuitemradio][aria-checked=true]:after{opacity:1;transform:translateY(-50%) scale(1)}.plyr__menu__container .plyr__control[role=menuitemradio]:focus-visible:before,.plyr__menu__container .plyr__control[role=menuitemradio]:hover:before{background:#23282f1a}.plyr__menu__container .plyr__menu__value{align-items:center;display:flex;margin-left:auto;margin-right:-5px;margin-right:calc(var(--plyr-control-spacing, 10px)*.7*-1 - -2px);overflow:hidden;padding-left:24.5px;padding-left:calc(var(--plyr-control-spacing, 10px)*.7*3.5);pointer-events:none}.plyr--full-ui input[type=range]{-webkit-appearance:none;appearance:none;background:#0000;border:0;border-radius:26px;border-radius:calc(var(--plyr-range-thumb-height, 13px)*2);color:#00b2ff;color:var(--plyr-range-fill-background,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));display:block;height:19px;height:calc(var(--plyr-range-thumb-active-shadow-width, 3px)*2 + var(--plyr-range-thumb-height, 13px));margin:0;min-width:0;padding:0;transition:box-shadow .3s ease;width:100%}.plyr--full-ui input[type=range]::-webkit-slider-runnable-track{background:#0000;background-image:linear-gradient(90deg,currentColor 0,#0000 0);background-image:linear-gradient(to right,currentColor var(--value,0),#0000 var(--value,0));border:0;border-radius:2.5px;border-radius:calc(var(--plyr-range-track-height, 5px)/2);height:5px;height:var(--plyr-range-track-height,5px);-webkit-transition:box-shadow .3s ease;transition:box-shadow .3s ease;-webkit-user-select:none;user-select:none}.plyr--full-ui input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;background:#fff;background:var(--plyr-range-thumb-background,#fff);border:0;border-radius:100%;box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px #23282f26,0 0 0 1px #23282f33);height:13px;height:var(--plyr-range-thumb-height,13px);margin-top:-4px;margin-top:calc((var(--plyr-range-thumb-height, 13px) - var(--plyr-range-track-height, 5px))/2*-1);position:relative;-webkit-transition:all .2s ease;transition:all .2s ease;width:13px;width:var(--plyr-range-thumb-height,13px)}.plyr--full-ui input[type=range]::-moz-range-track{background:#0000;border:0;border-radius:2.5px;border-radius:calc(var(--plyr-range-track-height, 5px)/2);height:5px;height:var(--plyr-range-track-height,5px);-moz-transition:box-shadow .3s ease;transition:box-shadow .3s ease;user-select:none}.plyr--full-ui input[type=range]::-moz-range-thumb{background:#fff;background:var(--plyr-range-thumb-background,#fff);border:0;border-radius:100%;box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px #23282f26,0 0 0 1px #23282f33);height:13px;height:var(--plyr-range-thumb-height,13px);position:relative;-moz-transition:all .2s ease;transition:all .2s ease;width:13px;width:var(--plyr-range-thumb-height,13px)}.plyr--full-ui input[type=range]::-moz-range-progress{background:currentColor;border-radius:2.5px;border-radius:calc(var(--plyr-range-track-height, 5px)/2);height:5px;height:var(--plyr-range-track-height,5px)}.plyr--full-ui input[type=range]::-ms-track{color:#0000}.plyr--full-ui input[type=range]::-ms-fill-upper,.plyr--full-ui input[type=range]::-ms-track{background:#0000;border:0;border-radius:2.5px;border-radius:calc(var(--plyr-range-track-height, 5px)/2);height:5px;height:var(--plyr-range-track-height,5px);-ms-transition:box-shadow .3s ease;transition:box-shadow .3s ease;user-select:none}.plyr--full-ui input[type=range]::-ms-fill-lower{background:#0000;background:currentColor;border:0;border-radius:2.5px;border-radius:calc(var(--plyr-range-track-height, 5px)/2);height:5px;height:var(--plyr-range-track-height,5px);-ms-transition:box-shadow .3s ease;transition:box-shadow .3s ease;user-select:none}.plyr--full-ui input[type=range]::-ms-thumb{background:#fff;background:var(--plyr-range-thumb-background,#fff);border:0;border-radius:100%;box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px #23282f26,0 0 0 1px #23282f33);height:13px;height:var(--plyr-range-thumb-height,13px);margin-top:0;position:relative;-ms-transition:all .2s ease;transition:all .2s ease;width:13px;width:var(--plyr-range-thumb-height,13px)}.plyr--full-ui input[type=range]::-ms-tooltip{display:none}.plyr--full-ui input[type=range]::-moz-focus-outer{border:0}.plyr--full-ui input[type=range]:focus{outline:0}.plyr--full-ui input[type=range]:focus-visible::-webkit-slider-runnable-track{outline:2px dashed #00b2ff;outline:2px dashed var(--plyr-focus-visible-color,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));outline-offset:2px}.plyr--full-ui input[type=range]:focus-visible::-moz-range-track{outline:2px dashed #00b2ff;outline:2px dashed var(--plyr-focus-visible-color,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));outline-offset:2px}.plyr--full-ui input[type=range]:focus-visible::-ms-track{outline:2px dashed #00b2ff;outline:2px dashed var(--plyr-focus-visible-color,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));outline-offset:2px}.plyr__poster{background-color:#000;background-color:var(--plyr-video-background,var(--plyr-video-background,#000));background-position:50% 50%;background-repeat:no-repeat;background-size:contain;height:100%;left:0;opacity:0;position:absolute;top:0;transition:opacity .2s ease;width:100%;z-index:1}.plyr--stopped.plyr__poster-enabled .plyr__poster{opacity:1}.plyr--youtube.plyr--paused.plyr__poster-enabled:not(.plyr--stopped) .plyr__poster{display:none}.plyr__time{font-size:13px;font-size:var(--plyr-font-size-time,var(--plyr-font-size-small,13px))}.plyr__time+.plyr__time:before{content:"\\2044";margin-right:10px;margin-right:var(--plyr-control-spacing,10px)}@media (max-width:767px){.plyr__time+.plyr__time{display:none}}.plyr__tooltip{background:#fff;background:var(--plyr-tooltip-background,#fff);border-radius:5px;border-radius:var(--plyr-tooltip-radius,5px);bottom:100%;box-shadow:0 1px 2px #00000026;box-shadow:var(--plyr-tooltip-shadow,0 1px 2px #00000026);color:#4a5464;color:var(--plyr-tooltip-color,#4a5464);font-size:13px;font-size:var(--plyr-font-size-small,13px);font-weight:400;font-weight:var(--plyr-font-weight-regular,400);left:50%;line-height:1.3;margin-bottom:10px;margin-bottom:calc(var(--plyr-control-spacing, 10px)/2*2);opacity:0;padding:5px 7.5px;padding:calc(var(--plyr-control-spacing, 10px)/2) calc(var(--plyr-control-spacing, 10px)/2*1.5);pointer-events:none;position:absolute;transform:translate(-50%,10px) scale(.8);transform-origin:50% 100%;transition:transform .2s ease .1s,opacity .2s ease .1s;white-space:nowrap;z-index:2}.plyr__tooltip:before{border-left:4px solid #0000;border-left:var(--plyr-tooltip-arrow-size,4px) solid #0000;border-right:4px solid #0000;border-right:var(--plyr-tooltip-arrow-size,4px) solid #0000;border-top:4px solid #fff;border-top:var(--plyr-tooltip-arrow-size,4px) solid var(--plyr-tooltip-background,#fff);bottom:-4px;bottom:calc(var(--plyr-tooltip-arrow-size, 4px)*-1);content:"";height:0;left:50%;position:absolute;transform:translate(-50%);width:0;z-index:2}.plyr .plyr__control:focus-visible .plyr__tooltip,.plyr .plyr__control:hover .plyr__tooltip,.plyr__tooltip--visible{opacity:1;transform:translate(-50%) scale(1)}.plyr .plyr__control:hover .plyr__tooltip{z-index:3}.plyr__controls>.plyr__control:first-child .plyr__tooltip,.plyr__controls>.plyr__control:first-child+.plyr__control .plyr__tooltip{left:0;transform:translateY(10px) scale(.8);transform-origin:0 100%}.plyr__controls>.plyr__control:first-child .plyr__tooltip:before,.plyr__controls>.plyr__control:first-child+.plyr__control .plyr__tooltip:before{left:16px;left:calc(var(--plyr-control-icon-size, 18px)/2 + var(--plyr-control-spacing, 10px)*.7)}.plyr__controls>.plyr__control:last-child .plyr__tooltip{left:auto;right:0;transform:translateY(10px) scale(.8);transform-origin:100% 100%}.plyr__controls>.plyr__control:last-child .plyr__tooltip:before{left:auto;right:16px;right:calc(var(--plyr-control-icon-size, 18px)/2 + var(--plyr-control-spacing, 10px)*.7);transform:translate(50%)}.plyr__controls>.plyr__control:first-child .plyr__tooltip--visible,.plyr__controls>.plyr__control:first-child+.plyr__control .plyr__tooltip--visible,.plyr__controls>.plyr__control:first-child+.plyr__control:focus-visible .plyr__tooltip,.plyr__controls>.plyr__control:first-child+.plyr__control:hover .plyr__tooltip,.plyr__controls>.plyr__control:first-child:focus-visible .plyr__tooltip,.plyr__controls>.plyr__control:first-child:hover .plyr__tooltip,.plyr__controls>.plyr__control:last-child .plyr__tooltip--visible,.plyr__controls>.plyr__control:last-child:focus-visible .plyr__tooltip,.plyr__controls>.plyr__control:last-child:hover .plyr__tooltip{transform:translate(0) scale(1)}.plyr__progress{left:6.5px;left:calc(var(--plyr-range-thumb-height, 13px)*.5);margin-right:13px;margin-right:var(--plyr-range-thumb-height,13px);position:relative}.plyr__progress input[type=range],.plyr__progress__buffer{margin-left:-6.5px;margin-left:calc(var(--plyr-range-thumb-height, 13px)*-.5);margin-right:-6.5px;margin-right:calc(var(--plyr-range-thumb-height, 13px)*-.5);width:calc(100% + 13px);width:calc(100% + var(--plyr-range-thumb-height, 13px))}.plyr__progress input[type=range]{position:relative;z-index:2}.plyr__progress .plyr__tooltip{left:0;max-width:120px;overflow-wrap:break-word}.plyr__progress__buffer{-webkit-appearance:none;background:#0000;border:0;border-radius:100px;height:5px;height:var(--plyr-range-track-height,5px);left:0;margin-top:-2.5px;margin-top:calc((var(--plyr-range-track-height, 5px)/2)*-1);padding:0;position:absolute;top:50%}.plyr__progress__buffer::-webkit-progress-bar{background:#0000}.plyr__progress__buffer::-webkit-progress-value{background:currentColor;border-radius:100px;min-width:5px;min-width:var(--plyr-range-track-height,5px);-webkit-transition:width .2s ease;transition:width .2s ease}.plyr__progress__buffer::-moz-progress-bar{background:currentColor;border-radius:100px;min-width:5px;min-width:var(--plyr-range-track-height,5px);-moz-transition:width .2s ease;transition:width .2s ease}.plyr__progress__buffer::-ms-fill{border-radius:100px;-ms-transition:width .2s ease;transition:width .2s ease}.plyr--loading .plyr__progress__buffer{animation:plyr-progress 1s linear infinite;background-image:linear-gradient(-45deg,#23282f99 25%,#0000 0,#0000 50%,#23282f99 0,#23282f99 75%,#0000 0,#0000);background-image:linear-gradient(-45deg,var(--plyr-progress-loading-background,#23282f99) 25%,#0000 25%,#0000 50%,var(--plyr-progress-loading-background,#23282f99) 50%,var(--plyr-progress-loading-background,#23282f99) 75%,#0000 75%,#0000);background-repeat:repeat-x;background-size:25px 25px;background-size:var(--plyr-progress-loading-size,25px) var(--plyr-progress-loading-size,25px);color:#0000}.plyr--video.plyr--loading .plyr__progress__buffer{background-color:#ffffff40;background-color:var(--plyr-video-progress-buffered-background,#ffffff40)}.plyr--audio.plyr--loading .plyr__progress__buffer{background-color:#c1c8d199;background-color:var(--plyr-audio-progress-buffered-background,#c1c8d199)}.plyr__progress__marker{background-color:#fff;background-color:var(--plyr-progress-marker-background,#fff);border-radius:1px;height:5px;height:var(--plyr-range-track-height,5px);position:absolute;top:50%;transform:translate(-50%,-50%);width:3px;width:var(--plyr-progress-marker-width,3px);z-index:3}.plyr__volume{align-items:center;display:flex;position:relative}.plyr__volume input[type=range]{margin-left:5px;margin-left:calc(var(--plyr-control-spacing, 10px)/2);margin-right:5px;margin-right:calc(var(--plyr-control-spacing, 10px)/2);max-width:90px;min-width:60px;position:relative;z-index:2}.plyr--audio{display:block}.plyr--audio .plyr__controls{background:#fff;background:var(--plyr-audio-controls-background,#fff);border-radius:inherit;color:#4a5464;color:var(--plyr-audio-control-color,#4a5464);padding:10px;padding:var(--plyr-control-spacing,10px)}.plyr--audio .plyr__control:focus-visible,.plyr--audio .plyr__control:hover,.plyr--audio .plyr__control[aria-expanded=true]{background:#00b2ff;background:var(--plyr-audio-control-background-hover,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));color:#fff;color:var(--plyr-audio-control-color-hover,#fff)}.plyr--full-ui.plyr--audio input[type=range]::-webkit-slider-runnable-track{background-color:#c1c8d199;background-color:var(--plyr-audio-range-track-background,var(--plyr-audio-progress-buffered-background,#c1c8d199))}.plyr--full-ui.plyr--audio input[type=range]::-moz-range-track{background-color:#c1c8d199;background-color:var(--plyr-audio-range-track-background,var(--plyr-audio-progress-buffered-background,#c1c8d199))}.plyr--full-ui.plyr--audio input[type=range]::-ms-track{background-color:#c1c8d199;background-color:var(--plyr-audio-range-track-background,var(--plyr-audio-progress-buffered-background,#c1c8d199))}.plyr--full-ui.plyr--audio input[type=range]:active::-webkit-slider-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #23282f1a;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px #23282f26,0 0 0 1px #23282f33),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,#23282f1a)}.plyr--full-ui.plyr--audio input[type=range]:active::-moz-range-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #23282f1a;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px #23282f26,0 0 0 1px #23282f33),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,#23282f1a)}.plyr--full-ui.plyr--audio input[type=range]:active::-ms-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #23282f1a;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px #23282f26,0 0 0 1px #23282f33),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,#23282f1a)}.plyr--audio .plyr__progress__buffer{color:#c1c8d199;color:var(--plyr-audio-progress-buffered-background,#c1c8d199)}.plyr--video{overflow:hidden}.plyr--video.plyr--menu-open{overflow:visible}.plyr__video-wrapper{background:#000;background:var(--plyr-video-background,var(--plyr-video-background,#000));border-radius:inherit;height:100%;margin:auto;overflow:hidden;position:relative;width:100%}.plyr__video-embed,.plyr__video-wrapper--fixed-ratio{aspect-ratio:16/9}@supports not (aspect-ratio:16/9){.plyr__video-embed,.plyr__video-wrapper--fixed-ratio{height:0;padding-bottom:56.25%;position:relative}}.plyr__video-embed iframe,.plyr__video-wrapper--fixed-ratio video{border:0;height:100%;left:0;position:absolute;top:0;width:100%}.plyr--full-ui .plyr__video-embed>.plyr__video-embed__container{padding-bottom:240%;position:relative;transform:translateY(-38.28125%)}.plyr--video .plyr__controls{background:linear-gradient(#0000,#000000bf);background:var(--plyr-video-controls-background,linear-gradient(#0000,#000000bf));border-bottom-left-radius:inherit;border-bottom-right-radius:inherit;bottom:0;color:#fff;color:var(--plyr-video-control-color,#fff);left:0;padding:5px;padding:calc(var(--plyr-control-spacing, 10px)/2);padding-top:20px;padding-top:calc(var(--plyr-control-spacing, 10px)*2);position:absolute;right:0;transition:opacity .4s ease-in-out,transform .4s ease-in-out;z-index:3}@media (min-width:480px){.plyr--video .plyr__controls{padding:10px;padding:var(--plyr-control-spacing,10px);padding-top:35px;padding-top:calc(var(--plyr-control-spacing, 10px)*3.5)}}.plyr--video.plyr--hide-controls .plyr__controls{opacity:0;pointer-events:none;transform:translateY(100%)}.plyr--video .plyr__control:focus-visible,.plyr--video .plyr__control:hover,.plyr--video .plyr__control[aria-expanded=true]{background:#00b2ff;background:var(--plyr-video-control-background-hover,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));color:#fff;color:var(--plyr-video-control-color-hover,#fff)}.plyr__control--overlaid{background:#00b2ff;background:var(--plyr-video-control-background-hover,var(--plyr-color-main,var(--plyr-color-main,#00b2ff)));border:0;border-radius:100%;color:#fff;color:var(--plyr-video-control-color,#fff);display:none;left:50%;opacity:.9;padding:15px;padding:calc(var(--plyr-control-spacing, 10px)*1.5);position:absolute;top:50%;transform:translate(-50%,-50%);transition:.3s;z-index:2}.plyr__control--overlaid svg{left:2px;position:relative}.plyr__control--overlaid:focus,.plyr__control--overlaid:hover{opacity:1}.plyr--playing .plyr__control--overlaid{opacity:0;visibility:hidden}.plyr--full-ui.plyr--video .plyr__control--overlaid{display:block}.plyr--full-ui.plyr--video input[type=range]::-webkit-slider-runnable-track{background-color:#ffffff40;background-color:var(--plyr-video-range-track-background,var(--plyr-video-progress-buffered-background,#ffffff40))}.plyr--full-ui.plyr--video input[type=range]::-moz-range-track{background-color:#ffffff40;background-color:var(--plyr-video-range-track-background,var(--plyr-video-progress-buffered-background,#ffffff40))}.plyr--full-ui.plyr--video input[type=range]::-ms-track{background-color:#ffffff40;background-color:var(--plyr-video-range-track-background,var(--plyr-video-progress-buffered-background,#ffffff40))}.plyr--full-ui.plyr--video input[type=range]:active::-webkit-slider-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #ffffff80;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px #23282f26,0 0 0 1px #23282f33),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,#ffffff80)}.plyr--full-ui.plyr--video input[type=range]:active::-moz-range-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #ffffff80;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px #23282f26,0 0 0 1px #23282f33),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,#ffffff80)}.plyr--full-ui.plyr--video input[type=range]:active::-ms-thumb{box-shadow:0 1px 1px #23282f26,0 0 0 1px #23282f33,0 0 0 3px #ffffff80;box-shadow:var(--plyr-range-thumb-shadow,0 1px 1px #23282f26,0 0 0 1px #23282f33),0 0 0 var(--plyr-range-thumb-active-shadow-width,3px) var(--plyr-audio-range-thumb-active-shadow-color,#ffffff80)}.plyr--video .plyr__progress__buffer{color:#ffffff40;color:var(--plyr-video-progress-buffered-background,#ffffff40)}.plyr:fullscreen{background:#000;border-radius:0!important;height:100%;margin:0;width:100%}.plyr:fullscreen video{height:100%}.plyr:fullscreen .plyr__control .icon--exit-fullscreen{display:block}.plyr:fullscreen .plyr__control .icon--exit-fullscreen+svg{display:none}.plyr:fullscreen.plyr--hide-controls{cursor:none}@media (min-width:1024px){.plyr:fullscreen .plyr__captions{font-size:21px;font-size:var(--plyr-font-size-xlarge,21px)}}.plyr--fullscreen-fallback{background:#000;border-radius:0!important;bottom:0;height:100%;left:0;margin:0;position:fixed;right:0;top:0;width:100%;z-index:10000000}.plyr--fullscreen-fallback video{height:100%}.plyr--fullscreen-fallback .plyr__control .icon--exit-fullscreen{display:block}.plyr--fullscreen-fallback .plyr__control .icon--exit-fullscreen+svg{display:none}.plyr--fullscreen-fallback.plyr--hide-controls{cursor:none}@media (min-width:1024px){.plyr--fullscreen-fallback .plyr__captions{font-size:21px;font-size:var(--plyr-font-size-xlarge,21px)}}.plyr__ads{border-radius:inherit;bottom:0;cursor:pointer;left:0;overflow:hidden;position:absolute;right:0;top:0;z-index:-1}.plyr__ads>div,.plyr__ads>div iframe{height:100%;position:absolute;width:100%}.plyr__ads:after{background:#23282f;border-radius:2px;bottom:10px;bottom:var(--plyr-control-spacing,10px);color:#fff;content:attr(data-badge-text);font-size:11px;padding:2px 6px;pointer-events:none;position:absolute;right:10px;right:var(--plyr-control-spacing,10px);z-index:3}.plyr__ads:empty:after{display:none}.plyr__cues{background:currentColor;display:block;height:5px;height:var(--plyr-range-track-height,5px);left:0;opacity:.8;position:absolute;top:50%;transform:translateY(-50%);width:3px;z-index:3}.plyr__preview-thumb{background-color:#fff;background-color:var(--plyr-tooltip-background,#fff);border-radius:8px;border-radius:var(--plyr-menu-radius,8px);bottom:100%;box-shadow:0 1px 2px #00000026;box-shadow:var(--plyr-tooltip-shadow,0 1px 2px #00000026);margin-bottom:10px;margin-bottom:calc(var(--plyr-control-spacing, 10px)/2*2);opacity:0;padding:3px;pointer-events:none;position:absolute;transform:translateY(10px) scale(.8);transform-origin:50% 100%;transition:transform .2s ease .1s,opacity .2s ease .1s;z-index:2}.plyr__preview-thumb--is-shown{opacity:1;transform:translate(0) scale(1)}.plyr__preview-thumb:before{border-left:4px solid #0000;border-left:var(--plyr-tooltip-arrow-size,4px) solid #0000;border-right:4px solid #0000;border-right:var(--plyr-tooltip-arrow-size,4px) solid #0000;border-top:4px solid #fff;border-top:var(--plyr-tooltip-arrow-size,4px) solid var(--plyr-tooltip-background,#fff);bottom:-4px;bottom:calc(var(--plyr-tooltip-arrow-size, 4px)*-1);content:"";height:0;left:calc(50% + var(--preview-arrow-offset));position:absolute;transform:translate(-50%);width:0;z-index:2}.plyr__preview-thumb__image-container{background:#c1c8d1;border-radius:7px;border-radius:calc(var(--plyr-menu-radius, 8px) - 1px);overflow:hidden;position:relative;z-index:0}.plyr__preview-thumb__image-container img,.plyr__preview-thumb__image-container:after{height:100%;left:0;position:absolute;top:0;width:100%}.plyr__preview-thumb__image-container:after{border-radius:inherit;box-shadow:inset 0 0 0 1px #00000026;content:"";pointer-events:none}.plyr__preview-thumb__image-container img{max-height:none;max-width:none}.plyr__preview-thumb__time-container{background:linear-gradient(#0000,#000000bf);background:var(--plyr-video-controls-background,linear-gradient(#0000,#000000bf));border-bottom-left-radius:7px;border-bottom-left-radius:calc(var(--plyr-menu-radius, 8px) - 1px);border-bottom-right-radius:7px;border-bottom-right-radius:calc(var(--plyr-menu-radius, 8px) - 1px);bottom:0;left:0;line-height:1.1;padding:20px 6px 6px;position:absolute;right:0;z-index:3}.plyr__preview-thumb__time-container span{color:#fff;font-size:13px;font-size:var(--plyr-font-size-time,var(--plyr-font-size-small,13px))}.plyr__preview-scrubbing{bottom:0;filter:blur(1px);height:100%;left:0;margin:auto;opacity:0;overflow:hidden;pointer-events:none;position:absolute;right:0;top:0;transition:opacity .3s ease;width:100%;z-index:1}.plyr__preview-scrubbing--is-shown{opacity:1}.plyr__preview-scrubbing img{height:100%;left:0;max-height:none;max-width:none;object-fit:contain;position:absolute;top:0;width:100%}.plyr--no-transition{transition:none!important}.plyr__sr-only{clip:rect(1px,1px,1px,1px);border:0!important;height:1px!important;overflow:hidden;padding:0!important;position:absolute!important;width:1px!important}.plyr [hidden]{display:none!important}.plyr--video{width:100%;height:100%}.plyr--audio-wrp{width:100%;height:100%;display:flex;align-items:center}.plyr--audio{width:120%;height:100%;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-end;background-color:none;--plyr-audio-controls-background: rgba(0, 0, 0, .5);--plyr-audio-control-color: #fff;border-radius:12px}.plyr__close img{width:24px;height:24px}.telebox-color-scheme-dark .plyr--audio{color-scheme:dark;background-color:#121212;--plyr-audio-controls-background: #121212;--plyr-audio-control-color: #eee}.disbale-progress .plyr__progress,.disbale-progress .plyr__volume,.disbale-progress.plyr__progress,.disbale-progress.plyr__volume,.is-mobile .plyr__progress,.is-mobile .plyr__volume{pointer-events:none}.is-mobile .plyr__control{display:none}.app-plyr-loading{display:flex;justify-content:center;align-items:center;width:100%;height:100%;position:absolute;top:0;left:0;z-index:100;background:white}.app-plyr-loader{border:4px solid rgb(57,171,255);border-left-color:transparent;width:36px;height:36px;animation:spin 1s linear infinite;border-radius:100%}@keyframes spin{0%{transform:rotate(0)}to{transform:rotate(360deg)}}\n';
 const _ua = (_a = window.navigator) == null ? void 0 : _a.userAgent;
 _ua == null ? void 0 : _ua.match(/(Edge?)\/(\d+)/);
 const isIOS = () => {
-  return typeof navigator !== "undefined" && typeof window !== "undefined" && /iPad|iPhone|iPod/.test(_ua);
+  return typeof navigator !== "undefined" && typeof window !== "undefined" && /iphone/i.test(_ua.toLowerCase()) || /ios/i.test(_ua.toLowerCase()) || /ipad/i.test(_ua.toLowerCase()) || /ipod/i.test(_ua.toLowerCase());
 };
 const isAndroid = () => {
-  return typeof navigator !== "undefined" && /Android/.test(_ua);
+  return /android/i.test(_ua.toLowerCase()) || /huawei/i.test(_ua.toLowerCase());
 };
 var closeSvg = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTIiIGZpbGw9IiNCOTM5M0IiLz4KPHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0xNi4yMDcxIDkuMjA3MTFDMTYuNTk3NiA4LjgxNjU4IDE2LjU5NzYgOC4xODM0MiAxNi4yMDcxIDcuNzkyODlDMTUuODE2NiA3LjQwMjM3IDE1LjE4MzQgNy40MDIzNyAxNC43OTI5IDcuNzkyODlMMTIgMTAuNTg1OEw5LjIwNzExIDcuNzkyODlDOC44MTY1OCA3LjQwMjM3IDguMTgzNDIgNy40MDIzNyA3Ljc5Mjg5IDcuNzkyODlDNy40MDIzNyA4LjE4MzQyIDcuNDAyMzcgOC44MTY1OCA3Ljc5Mjg5IDkuMjA3MTFMMTAuNTg1OCAxMkw3Ljc5Mjg5IDE0Ljc5MjlDNy40MDIzNyAxNS4xODM0IDcuNDAyMzcgMTUuODE2NiA3Ljc5Mjg5IDE2LjIwNzFDOC4xODM0MiAxNi41OTc2IDguODE2NTggMTYuNTk3NiA5LjIwNzExIDE2LjIwNzFMMTIgMTMuNDE0MkwxNC43OTI5IDE2LjIwNzFDMTUuMTgzNCAxNi41OTc2IDE1LjgxNjYgMTYuNTk3NiAxNi4yMDcxIDE2LjIwNzFDMTYuNTk3NiAxNS44MTY2IDE2LjU5NzYgMTUuMTgzNCAxNi4yMDcxIDE0Ljc5MjlMMTMuNDE0MiAxMkwxNi4yMDcxIDkuMjA3MTFaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K";
 const ClickThroughAppliances = /* @__PURE__ */ new Set(["clicker"]);
