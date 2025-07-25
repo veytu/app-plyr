@@ -3444,7 +3444,7 @@ const Plyr = {
           p.appendChild(close);
           const toggleClickThrough = (enable) => {
             p.style.pointerEvents = enable ? "none" : "auto";
-            img.style.visibility = enable ? "hidden" : "visible";
+            img.style.display = enable ? "none" : "block";
           };
           if (room == null ? void 0 : room.state.memberState.currentApplianceName) {
             toggleClickThrough(!shouldClickThrough(room == null ? void 0 : room.state.memberState.currentApplianceName));

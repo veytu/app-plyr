@@ -148,7 +148,7 @@ const Plyr: NetlessApp<Attributes> = {
           p.appendChild(close);
           const toggleClickThrough = (enable?: boolean) => {
             p.style.pointerEvents = enable ? "none" : "auto";
-            img.style.visibility = enable ? "hidden" : "visible";
+            img.style.display = enable ? "none" : "block";
           };
 
           if (room?.state.memberState.currentApplianceName) {
