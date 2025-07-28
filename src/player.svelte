@@ -34,6 +34,7 @@
         controls: ["play", "progress", "current-time", "mute", "volume"],
         clickToPlay: false,
         youtube: { autoplay: true },
+        iconUrl: "https://solutions-apaas.agora.io/static/assets/plyr.svg",
       });
       sync.player = player;
     }

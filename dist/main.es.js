@@ -3058,7 +3058,8 @@ function instance($$self, $$props, $$invalidate) {
           fullscreen: { enabled: false },
           controls: ["play", "progress", "current-time", "mute", "volume"],
           clickToPlay: false,
-          youtube: { autoplay: true }
+          youtube: { autoplay: true },
+          iconUrl: "https://solutions-apaas.agora.io/static/assets/plyr.svg"
         }
       );
       $$invalidate(7, sync.player = player, sync);
