@@ -3164,6 +3164,7 @@ class Sync {
     this.registerListeners(player);
     this.watchUserInputs(player);
     this._sync_timer = setInterval(this.syncAll.bind(this), this._interval);
+    safePlay(player);
   }
   syncAll() {
     const { behavior, player, context } = this;
