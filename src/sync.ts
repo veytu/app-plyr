@@ -25,7 +25,6 @@ export class Sync {
   private _dispatch_time_again = false;
   private _buffering_timer = 0;
   private _disposer: (() => void) | null = null;
-  private firstSync = false;
 
   constructor(readonly context: AppContext<Attributes>) {
     const room = context.getRoom();
@@ -62,6 +61,7 @@ export class Sync {
     safePlay(player)
   }
 
+  // 多端同步数据函数
   syncAll() {
     const { behavior, player, context } = this;
     // wait before player set
@@ -69,9 +69,6 @@ export class Sync {
 
     const { storage } = context;
     const { currentTime, hostTime, muted, paused, volume, owner } = storage.state;
-    // if the state comes from self, don't sync
-    if (behavior === "owner" && owner === this.uid && this.firstSync) return;
-    this.firstSync = true;
 
     if (paused !== player.paused && !this._skip_next_play_pause) {
       console.log("< sync paused", paused);

@@ -3140,7 +3140,6 @@ class Sync {
     this._dispatch_time_again = false;
     this._buffering_timer = 0;
     this._disposer = null;
-    this.firstSync = false;
     const room = context.getRoom();
     const player = context.getDisplayer();
     this.uid = room ? room.uid : "";
@@ -3172,9 +3171,6 @@ class Sync {
       return;
     const { storage } = context;
     const { currentTime, hostTime, muted, paused, volume, owner } = storage.state;
-    if (behavior === "owner" && owner === this.uid && this.firstSync)
-      return;
-    this.firstSync = true;
     if (paused !== player.paused && !this._skip_next_play_pause) {
       console.log("< sync paused", paused);
       paused ? player.pause() : safePlay(player);

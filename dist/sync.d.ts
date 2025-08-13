@@ -21,7 +21,6 @@ export declare class Sync {
     private _dispatch_time_again;
     private _buffering_timer;
     private _disposer;
-    private firstSync;
     constructor(context: AppContext<Attributes>);
     dispose(): void;
     get player(): Plyr | null;
