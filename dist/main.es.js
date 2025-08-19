@@ -394,6 +394,7 @@ async function safePlay(player) {
     await player.play();
     return true;
   } catch (err) {
+    player.muted = true;
     await player.play();
     console.debug(err);
     return false;
@@ -3162,7 +3163,9 @@ class Sync {
     this.registerListeners(player);
     this.watchUserInputs(player);
     this._sync_timer = setInterval(this.syncAll.bind(this), this._interval);
-    safePlay(player);
+    setTimeout(() => {
+      safePlay(player);
+    }, 1e3);
   }
   syncAll() {
     const { behavior, player, context } = this;
@@ -3172,7 +3175,13 @@ class Sync {
     const { currentTime, hostTime, muted, paused, volume, owner } = storage.state;
     if (paused !== player.paused && !this._skip_next_play_pause) {
       console.log("< sync paused", paused);
-      paused ? player.pause() : safePlay(player);
+      if (paused) {
+        player.pause();
+      } else {
+        setTimeout(() => {
+          safePlay(player);
+        }, 1e3);
+      }
     }
     if (muted !== player.muted) {
       console.log("< sync muted", muted);
