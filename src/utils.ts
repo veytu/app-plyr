@@ -17,7 +17,7 @@ export async function safePlay(player: Plyr): Promise<boolean> {
     await player.play();
     return true;
   } catch (err) {
-    player.muted = true;
+    // player.muted = true;
     await player.play();
     console.debug(err);
     return false;

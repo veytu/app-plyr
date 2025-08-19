@@ -394,7 +394,6 @@ async function safePlay(player) {
     await player.play();
     return true;
   } catch (err) {
-    player.muted = true;
     await player.play();
     console.debug(err);
     return false;
