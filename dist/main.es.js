@@ -3163,9 +3163,6 @@ class Sync {
     this.registerListeners(player);
     this.watchUserInputs(player);
     this._sync_timer = setInterval(this.syncAll.bind(this), this._interval);
-    setTimeout(() => {
-      safePlay(player);
-    }, 1e3);
   }
   syncAll() {
     const { behavior, player, context } = this;
@@ -3178,9 +3175,7 @@ class Sync {
       if (paused) {
         player.pause();
       } else {
-        setTimeout(() => {
-          safePlay(player);
-        }, 1e3);
+        safePlay(player);
       }
     }
     if (muted !== player.muted) {

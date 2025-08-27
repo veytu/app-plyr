@@ -58,9 +58,6 @@ export class Sync {
     this.registerListeners(player);
     this.watchUserInputs(player);
     this._sync_timer = setInterval(this.syncAll.bind(this), this._interval);
-    setTimeout(() => {
-      safePlay(player);
-    }, 1000);
   }
 
   // 多端同步数据函数
@@ -77,9 +74,7 @@ export class Sync {
       if (paused) { 
         player.pause();
       } else {
-        setTimeout(() => {
-          safePlay(player);
-        }, 1000);
+        safePlay(player);
       }
     }
 
