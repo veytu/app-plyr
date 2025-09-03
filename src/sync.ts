@@ -121,7 +121,7 @@ export class Sync {
 
     $mute?.addEventListener("click", () => {
       this.behavior === "owner" && this.dispatchOwner();
-      this.dispatchVolume(player);
+      this.dispatchMuted(player,player.muted);
     });
 
     $volume?.addEventListener("change", () => {
@@ -201,9 +201,13 @@ export class Sync {
   private dispatchVolume(player: Plyr) {
     console.log("> set volume", player.volume);
     this.context.storage.setState({
-      muted: player.muted,
       volume: player.volume,
     });
+  }
+
+  private dispatchMuted(player: Plyr,muted:boolean) {
+    console.log("> set muted",muted, player.muted);
+    this.context.storage.setState({muted});
   }
 
   private dispatchSeek(player: Plyr, $seek: HTMLInputElement) {

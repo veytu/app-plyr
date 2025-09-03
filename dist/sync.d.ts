@@ -35,6 +35,7 @@ export declare class Sync {
     private dispatchPlayPause;
     private skipNextPlayPause;
     private dispatchVolume;
+    private dispatchMuted;
     private dispatchSeek;
     private dispatchCurrentTime;
     private clearThrottle;

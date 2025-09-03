@@ -3214,7 +3214,7 @@ class Sync {
     });
     $mute == null ? void 0 : $mute.addEventListener("click", () => {
       this.behavior === "owner" && this.dispatchOwner();
-      this.dispatchVolume(player);
+      this.dispatchMuted(player, player.muted);
     });
     $volume == null ? void 0 : $volume.addEventListener("change", () => {
       this.behavior === "owner" && this.dispatchOwner();
@@ -3285,9 +3285,12 @@ class Sync {
   dispatchVolume(player) {
     console.log("> set volume", player.volume);
     this.context.storage.setState({
-      muted: player.muted,
       volume: player.volume
     });
+  }
+  dispatchMuted(player, muted) {
+    console.log("> set muted", muted, player.muted);
+    this.context.storage.setState({ muted });
   }
   dispatchSeek(player, $seek) {
     const currentTime = $seek.valueAsNumber * player.duration / 100;
