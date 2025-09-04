@@ -140,26 +140,34 @@ export class Sync {
 
   private registerListeners(player: Plyr) {
     player.on("ended", () => {
-      player.stop();
-      this.context.storage.setState({ paused: true, currentTime: 0 });
+      console.log("> listen player ended");
+      // 视频结束时，保持当前时间（结尾）并暂停，不自动重置到开头
+      player.pause();
+      this.context.storage.setState({ paused: true, currentTime: player.duration });
     });
     player.on("waiting", () => {
+      console.log("> listen player waiting");
       this._buffering = true;
       this._buffering_timer = setTimeout(this.clearBuffering.bind(this), this._interval / 2);
     });
     player.on("playing", () => {
+      console.log("> listen player playing");
       this._buffering = false;
     });
     player.on("timeupdate", () => {
+      console.log("> listen player timeupdate");
       this.isOwner() && this.dispatchCurrentTime(player);
     });
     player.on("volumechange", () => {
+      console.log("> listen player volumechange");
       this.isOwner() && this.dispatchVolume(player);
     });
     player.on("play", () => {
+      console.log("> listen player play");
       this.isOwner() && this.dispatchPlayPause(player);
     });
     player.on("pause", () => {
+      console.log("> set pause auto");
       this.isOwner() && this.dispatchPlayPause(player);
     });
 
