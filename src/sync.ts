@@ -181,7 +181,7 @@ export class Sync {
     //   }
     // });
     // 监听windowManager的onAllBoxStatusInfo事件，如果当前appId是隐藏状态则自动暂停播放
-    this.context.emitter.on("boxStatusChange", (info) => {
+    this.context.emitter.on("boxStatusChange", (info: { appId: any; status: any; }) => {
       if (info.appId === this.context.appId && info.status === "minimized" && this.isOwner()) {
         player.pause();
       }
