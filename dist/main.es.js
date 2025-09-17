@@ -3041,34 +3041,54 @@ function instance($$self, $$props, $$invalidate) {
   let { readonly } = $$props;
   let { isMobile } = $$props;
   const type = storage.state.provider ? void 0 : storage.state.type || guessTypeFromSrc(storage.state.src);
-  const { src, poster } = storage.state;
+  const { src, poster, iconUrl } = storage.state;
   const useHLS = hlsTypes.includes(String(type).toLowerCase());
   let player_element;
   let player;
+  let pcmAudioSource;
+  const connectToPcmProxyIfPossible = (element2) => {
+    var _a2;
+    const pcmProxy = window.__pcmProxy;
+    if (pcmProxy) {
+      if (element2 instanceof HTMLVideoElement || element2 instanceof HTMLAudioElement) {
+        console.log("[Plyr] connect pcm");
+        pcmAudioSource = (_a2 = pcmProxy.connect) == null ? void 0 : _a2.call(pcmProxy, element2);
+      }
+    }
+  };
   onMount(async () => {
     if (player_element) {
+      connectToPcmProxyIfPossible(player_element);
       if (useHLS && cannotPlayHLSNatively(player_element)) {
         const hls = await loadHLS();
         hls.loadSource(src);
         hls.attachMedia(player_element);
       }
-      player = new Plyr$1(
-        player_element,
-        {
-          fullscreen: { enabled: false },
-          controls: ["play", "progress", "current-time", "mute", "volume"],
-          clickToPlay: false,
-          youtube: { autoplay: true },
-          iconUrl: "https://solutions-apaas.agora.io/static/assets/plyr.svg"
-        }
-      );
+      const options = {
+        fullscreen: { enabled: false },
+        controls: ["play", "progress", "current-time", "mute", "volume"],
+        clickToPlay: false,
+        youtube: { autoplay: true }
+      };
+      if (iconUrl) {
+        options.iconUrl = iconUrl;
+      }
+      player = new Plyr$1(player_element, options);
       $$invalidate(7, sync.player = player, sync);
+      window.__plyr = player;
+      if (!pcmAudioSource) {
+        const media2 = player.media;
+        if (media2) {
+          connectToPcmProxyIfPossible(media2);
+        }
+      }
     }
   });
   onDestroy(() => {
     try {
       sync.dispose();
       player == null ? void 0 : player.destroy();
+      pcmAudioSource == null ? void 0 : pcmAudioSource.disconnect();
     } catch (e) {
       console.warn("[Plyr] destroy plyr error", e);
     }
@@ -3127,8 +3147,9 @@ class Player extends SvelteComponent {
   }
 }
 class Sync {
-  constructor(context) {
+  constructor(context, loading) {
     this.context = context;
+    this.loading = loading;
     this.behavior = "owner";
     this._skip_next_play_pause = 0;
     this._sync_timer = 0;
@@ -3140,11 +3161,13 @@ class Sync {
     this._dispatch_time_again = false;
     this._buffering_timer = 0;
     this._disposer = null;
+    this._loading = null;
     const room = context.getRoom();
     const player = context.getDisplayer();
     this.uid = room ? room.uid : "";
     this.getTimestamp = room ? () => room.calibrationTimestamp : () => player.beginTimestamp + player.progressTime;
     this._disposer = this.context.storage.addStateChangedListener(this.syncAll.bind(this));
+    this._loading = loading;
   }
   dispose() {
     this._disposer && this._disposer();
@@ -3163,6 +3186,8 @@ class Sync {
     this.registerListeners(player);
     this.watchUserInputs(player);
     this._sync_timer = setInterval(this.syncAll.bind(this), this._interval);
+    this._loading && this._loading.remove();
+    this._loading = null;
   }
   syncAll() {
     const { behavior, player, context } = this;
@@ -3170,13 +3195,11 @@ class Sync {
       return;
     const { storage } = context;
     const { currentTime, hostTime, muted, paused, volume, owner } = storage.state;
+    if (behavior === "owner" && owner === this.uid)
+      return;
     if (paused !== player.paused && !this._skip_next_play_pause) {
       console.log("< sync paused", paused);
-      if (paused) {
-        player.pause();
-      } else {
-        safePlay(player);
-      }
+      paused ? player.pause() : safePlay(player);
     }
     if (muted !== player.muted) {
       console.log("< sync muted", muted);
@@ -3214,7 +3237,7 @@ class Sync {
     });
     $mute == null ? void 0 : $mute.addEventListener("click", () => {
       this.behavior === "owner" && this.dispatchOwner();
-      this.dispatchMuted(player, player.muted);
+      this.dispatchVolume(player);
     });
     $volume == null ? void 0 : $volume.addEventListener("change", () => {
       this.behavior === "owner" && this.dispatchOwner();
@@ -3231,7 +3254,7 @@ class Sync {
   registerListeners(player) {
     player.on("ended", () => {
       console.log("> listen player ended");
-      player.pause();
+      player.stop();
       this.context.storage.setState({ paused: true, currentTime: player.duration });
     });
     player.on("waiting", () => {
@@ -3259,10 +3282,9 @@ class Sync {
       console.log("> set pause auto");
       this.isOwner() && this.dispatchPlayPause(player);
     });
-    const box = this.context.getBox();
-    box.events.on("minimized", (mini) => {
-      if (this.isOwner()) {
-        mini && player.pause();
+    this.context.emitter.on("boxStatusChange", (info) => {
+      if (info.appId === this.context.appId && info.status === "minimized" && this.isOwner()) {
+        player.pause();
       }
     });
   }
@@ -3292,12 +3314,9 @@ class Sync {
   dispatchVolume(player) {
     console.log("> set volume", player.volume);
     this.context.storage.setState({
+      muted: player.muted,
       volume: player.volume
     });
-  }
-  dispatchMuted(player, muted) {
-    console.log("> set muted", muted, player.muted);
-    this.context.storage.setState({ muted });
   }
   dispatchSeek(player, $seek) {
     const currentTime = $seek.valueAsNumber * player.duration / 100;
@@ -3389,8 +3408,9 @@ const Plyr = {
     const type = storage.state.type || guessTypeFromSrc(storage.state.src);
     const box = context.getBox();
     const room = context.getRoom();
+    const isMobile = isIOS() || isAndroid();
     box.mountStyles(styles);
-    box.$box.classList.toggle("is-mobile", isIOS() || isAndroid());
+    box.$box.classList.toggle("is-mobile", isMobile);
     const loading = document.createElement("div");
     loading.className = "app-plyr-loading";
     const loader = document.createElement("div");
@@ -3399,22 +3419,21 @@ const Plyr = {
     if (type == null ? void 0 : type.startsWith("video/")) {
       box.$content.appendChild(loading);
     }
-    const sync = new Sync(context);
+    const sync = new Sync(context, loading);
     const app = new Player({
       target: box.$content,
       props: {
         storage: context.storage,
         sync,
-        readonly: isIOS() || isAndroid() || !(context == null ? void 0 : context.getIsWritable()),
-        isMobile: isIOS() || isAndroid()
+        readonly: isMobile || !(context == null ? void 0 : context.getIsWritable()),
+        isMobile
       }
     });
-    setTimeout(() => {
-      loading.remove();
-    }, 300);
-    context.emitter.on("writableChange", (writable) => {
-      app.$set({ readonly: isIOS() || isAndroid() || !writable });
-    });
+    if (!isMobile) {
+      context.emitter.on("writableChange", (writable) => {
+        app.$set({ readonly: !writable });
+      });
+    }
     context.emitter.on("destroy", () => {
       try {
         sync.dispose();
@@ -3422,6 +3441,34 @@ const Plyr = {
       } catch (err) {
       }
     });
+    if (window.__pcmProxy) {
+      let currentApp = app;
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === "hidden") {
+          console.log("[Plyr] destroy app for pcm proxy.");
+          while (box.$content.firstChild) {
+            box.$content.removeChild(box.$content.firstChild);
+          }
+          currentApp.$destroy();
+        } else {
+          console.log("[Plyr] recreate app for pcm proxy.");
+          currentApp = new Player({
+            target: box.$content,
+            props: {
+              storage: context.storage,
+              sync,
+              readonly: isMobile || !(context == null ? void 0 : context.getIsWritable()),
+              isMobile
+            }
+          });
+        }
+      };
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      context.emitter.on("destroy", () => {
+        currentApp.$destroy();
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      });
+    }
     const shouldClickThrough = (tool) => {
       return ClickThroughAppliances.has(tool);
     };

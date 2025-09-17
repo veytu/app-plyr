@@ -22,6 +22,7 @@ export interface Attributes {
 
   provider?: "youtube" | "vimeo";
   owner?: string;
+  iconUrl?: string;
 }
 
 const DefaultAttributes: Pick<Attributes, "volume" | "paused" | "muted" | "currentTime"> = {
@@ -59,9 +60,10 @@ const Plyr: NetlessApp<Attributes> = {
 
     const box = context.getBox();
     const room = context.getRoom();
+    const isMobile = isIOS() || isAndroid();
 
     box.mountStyles(styles);
-    box.$box.classList.toggle("is-mobile", isIOS() || isAndroid());
+    box.$box.classList.toggle("is-mobile", isMobile);
 
     const loading = document.createElement("div");
     loading.className = "app-plyr-loading";
@@ -73,24 +75,27 @@ const Plyr: NetlessApp<Attributes> = {
       box.$content.appendChild(loading);
     }
 
-    const sync = new Sync(context);
+    const sync = new Sync(context, loading);
     const app = new Player({
       target: box.$content,
       props: {
         storage: context.storage,
         sync,
-        readonly: isIOS() || isAndroid() || !context?.getIsWritable(),
-        isMobile: isIOS() || isAndroid(),
+        readonly: isMobile || !context?.getIsWritable(),
+        isMobile,
       },
     });
 
-    setTimeout(() => {
-      loading.remove();
-    }, 300);
-
-    context.emitter.on("writableChange", writable => {
-      app.$set({ readonly: isIOS() || isAndroid() || !writable });
-    });
+    // todo 要根据结果来做处理，使用Player.on("ready")、progres；两种判断下使用哪个处理
+    // 在sync.ts中处理
+    // setTimeout(() => {
+    //   loading.remove();
+    // }, 300);
+    if (!isMobile) {
+      context.emitter.on("writableChange", writable => {
+        app.$set({ readonly: !writable });
+      });
+    }
 
     // sync.behavior = "ideal";
 
@@ -110,6 +115,37 @@ const Plyr: NetlessApp<Attributes> = {
       }
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).__pcmProxy) {
+      let currentApp = app;
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === "hidden") {
+          console.log("[Plyr] destroy app for pcm proxy.");
+          while (box.$content.firstChild) {
+            box.$content.removeChild(box.$content.firstChild);
+          }
+          currentApp.$destroy();
+        } else {
+          console.log("[Plyr] recreate app for pcm proxy.");
+          currentApp = new Player({
+            target: box.$content,
+            props: { 
+              storage: context.storage, 
+              sync,
+              readonly: isMobile || !context?.getIsWritable(),
+              isMobile 
+            },
+          });
+        }
+      };
+
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      context.emitter.on("destroy", () => {
+        currentApp.$destroy();
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      });
+    }
+    
     const shouldClickThrough = (tool: string) => {
       return ClickThroughAppliances.has(tool);
     };
@@ -166,6 +202,7 @@ const Plyr: NetlessApp<Attributes> = {
         }
       }
     }
+
   },
 };
 

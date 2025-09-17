@@ -1,3 +1,4 @@
+// @ts-ignore
 import type Plyr from "plyr";
 import type { AppContext, Player } from "@netless/window-manager";
 import type { Attributes } from ".";
@@ -25,8 +26,9 @@ export class Sync {
   private _dispatch_time_again = false;
   private _buffering_timer = 0;
   private _disposer: (() => void) | null = null;
+  private _loading: HTMLElement | null = null;
 
-  constructor(readonly context: AppContext<Attributes>) {
+  constructor(readonly context: AppContext<Attributes>, readonly loading: HTMLElement) {
     const room = context.getRoom();
     const player = context.getDisplayer() as Player;
 
@@ -36,6 +38,7 @@ export class Sync {
       : () => player.beginTimestamp + player.progressTime;
 
     this._disposer = this.context.storage.addStateChangedListener(this.syncAll.bind(this));
+    this._loading = loading;
   }
 
   dispose() {
@@ -58,6 +61,8 @@ export class Sync {
     this.registerListeners(player);
     this.watchUserInputs(player);
     this._sync_timer = setInterval(this.syncAll.bind(this), this._interval);
+    this._loading && this._loading.remove();
+    this._loading = null;
   }
 
   // 多端同步数据函数
@@ -68,14 +73,12 @@ export class Sync {
 
     const { storage } = context;
     const { currentTime, hostTime, muted, paused, volume, owner } = storage.state;
+    // if the state comes from self, don't sync
+    if (behavior === "owner" && owner === this.uid) return;
 
     if (paused !== player.paused && !this._skip_next_play_pause) {
       console.log("< sync paused", paused);
-      if (paused) { 
-        player.pause();
-      } else {
-        safePlay(player);
-      }
+      paused ? player.pause() : safePlay(player);
     }
 
     if (muted !== player.muted) {
@@ -121,7 +124,7 @@ export class Sync {
 
     $mute?.addEventListener("click", () => {
       this.behavior === "owner" && this.dispatchOwner();
-      this.dispatchMuted(player,player.muted);
+      this.dispatchVolume(player);
     });
 
     $volume?.addEventListener("change", () => {
@@ -142,7 +145,7 @@ export class Sync {
     player.on("ended", () => {
       console.log("> listen player ended");
       // 视频结束时，保持当前时间（结尾）并暂停，不自动重置到开头
-      player.pause();
+      player.stop();
       this.context.storage.setState({ paused: true, currentTime: player.duration });
     });
     player.on("waiting", () => {
@@ -171,10 +174,16 @@ export class Sync {
       this.isOwner() && this.dispatchPlayPause(player);
     });
 
-    const box = this.context.getBox();
-    box.events.on("minimized", mini => {
-      if (this.isOwner()) {
-        mini && player.pause();
+    // const box = this.context.getBox();
+    // box.events.on("minimized", mini => {
+    //   if (this.isOwner()) {
+    //     mini && player.pause();
+    //   }
+    // });
+    // 监听windowManager的onAllBoxStatusInfo事件，如果当前appId是隐藏状态则自动暂停播放
+    this.context.emitter.on("boxStatusChange", (info) => {
+      if (info.appId === this.context.appId && info.status === "minimized" && this.isOwner()) {
+        player.pause();
       }
     });
   }
@@ -209,13 +218,9 @@ export class Sync {
   private dispatchVolume(player: Plyr) {
     console.log("> set volume", player.volume);
     this.context.storage.setState({
+      muted: player.muted,
       volume: player.volume,
     });
-  }
-
-  private dispatchMuted(player: Plyr,muted:boolean) {
-    console.log("> set muted",muted, player.muted);
-    this.context.storage.setState({muted});
   }
 
   private dispatchSeek(player: Plyr, $seek: HTMLInputElement) {

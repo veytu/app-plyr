@@ -3,6 +3,7 @@ import type { AppContext } from "@netless/window-manager";
 import type { Attributes } from ".";
 export declare class Sync {
     readonly context: AppContext<Attributes>;
+    readonly loading: HTMLElement;
     /**
      * `ideal`: user action triggers player state change, nothing more.
      *
@@ -21,7 +22,8 @@ export declare class Sync {
     private _dispatch_time_again;
     private _buffering_timer;
     private _disposer;
-    constructor(context: AppContext<Attributes>);
+    private _loading;
+    constructor(context: AppContext<Attributes>, loading: HTMLElement);
     dispose(): void;
     get player(): Plyr | null;
     set player(player: Plyr | null);
@@ -35,7 +37,6 @@ export declare class Sync {
     private dispatchPlayPause;
     private skipNextPlayPause;
     private dispatchVolume;
-    private dispatchMuted;
     private dispatchSeek;
     private dispatchCurrentTime;
     private clearThrottle;

@@ -13,6 +13,7 @@ export interface Attributes {
     hostTime: number;
     provider?: "youtube" | "vimeo";
     owner?: string;
+    iconUrl?: string;
 }
 declare const Plyr: NetlessApp<Attributes>;
 export default Plyr;
