@@ -6,6 +6,8 @@ import { isAndroid, isIOS } from "./environment";
 import { guessTypeFromSrc } from "./mime";
 import closeSvg from "./assets/close.svg";
 const ClickThroughAppliances = new Set(["clicker"]);
+export const version = __APP_VERSION__;
+
 export interface Attributes {
   /** can only set once */
   src: string;
@@ -39,6 +41,16 @@ const Plyr: NetlessApp<Attributes> = {
     minheight: 80,
   },
   setup(context) {
+    console.log("SDK 版本信息-App App Docs Viewer ", version);
+    //todo 测试代码，打印版本信息到根节点上显示,后面要注释掉，方便调试，当前的显示左上角垂直便宜80
+    const versionElement = document.createElement("div");
+    versionElement.style.position = "absolute";
+    versionElement.style.top = "80px";
+    versionElement.style.left = "0";
+    versionElement.style.color = "red";
+    versionElement.innerHTML = `SDK 版本信息-App App Plyr ${version}`;
+    document.body.appendChild(versionElement);
+
     const storage = context.storage;
 
     if (context?.getIsWritable()) {

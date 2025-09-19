@@ -3379,6 +3379,7 @@ const isAndroid = () => {
 };
 var closeSvg = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTIiIGZpbGw9IiNCOTM5M0IiLz4KPHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0xNi4yMDcxIDkuMjA3MTFDMTYuNTk3NiA4LjgxNjU4IDE2LjU5NzYgOC4xODM0MiAxNi4yMDcxIDcuNzkyODlDMTUuODE2NiA3LjQwMjM3IDE1LjE4MzQgNy40MDIzNyAxNC43OTI5IDcuNzkyODlMMTIgMTAuNTg1OEw5LjIwNzExIDcuNzkyODlDOC44MTY1OCA3LjQwMjM3IDguMTgzNDIgNy40MDIzNyA3Ljc5Mjg5IDcuNzkyODlDNy40MDIzNyA4LjE4MzQyIDcuNDAyMzcgOC44MTY1OCA3Ljc5Mjg5IDkuMjA3MTFMMTAuNTg1OCAxMkw3Ljc5Mjg5IDE0Ljc5MjlDNy40MDIzNyAxNS4xODM0IDcuNDAyMzcgMTUuODE2NiA3Ljc5Mjg5IDE2LjIwNzFDOC4xODM0MiAxNi41OTc2IDguODE2NTggMTYuNTk3NiA5LjIwNzExIDE2LjIwNzFMMTIgMTMuNDE0MkwxNC43OTI5IDE2LjIwNzFDMTUuMTgzNCAxNi41OTc2IDE1LjgxNjYgMTYuNTk3NiAxNi4yMDcxIDE2LjIwNzFDMTYuNTk3NiAxNS44MTY2IDE2LjU5NzYgMTUuMTgzNCAxNi4yMDcxIDE0Ljc5MjlMMTMuNDE0MiAxMkwxNi4yMDcxIDkuMjA3MTFaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K";
 const ClickThroughAppliances = /* @__PURE__ */ new Set(["clicker"]);
+const version = "0.2.5-wukongBeta.4";
 const DefaultAttributes = {
   volume: 1,
   paused: true,
@@ -3392,6 +3393,14 @@ const Plyr = {
     minheight: 80
   },
   setup(context) {
+    console.log("SDK \u7248\u672C\u4FE1\u606F-App App Docs Viewer ", version);
+    const versionElement = document.createElement("div");
+    versionElement.style.position = "absolute";
+    versionElement.style.top = "80px";
+    versionElement.style.left = "0";
+    versionElement.style.color = "red";
+    versionElement.innerHTML = `SDK \u7248\u672C\u4FE1\u606F-App App Plyr ${version}`;
+    document.body.appendChild(versionElement);
     const storage = context.storage;
     if (context == null ? void 0 : context.getIsWritable()) {
       storage.ensureState(DefaultAttributes);
@@ -3520,5 +3529,5 @@ const Plyr = {
     }
   }
 };
-export { Plyr as default };
+export { Plyr as default, version };
 //# sourceMappingURL=main.es.js.map
