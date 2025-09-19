@@ -42,12 +42,14 @@ const Plyr: NetlessApp<Attributes> = {
   },
   setup(context) {
     console.log("SDK 版本信息-App App Docs Viewer ", version);
-    //todo 测试代码，打印版本信息到根节点上显示,后面要注释掉，方便调试，当前的显示左上角垂直便宜80
+    //todo 测试代码，打印版本信息到根节点上显示,后面要注释掉，方便调试，当前的显示左上角垂直便宜200
     const versionElement = document.createElement("div");
     versionElement.style.position = "absolute";
-    versionElement.style.top = "80px";
+    versionElement.style.top = "200px";
     versionElement.style.left = "0";
     versionElement.style.color = "red";
+    versionElement.style.fontSize = "12px";
+    versionElement.style.zIndex = "99999";
     versionElement.innerHTML = `SDK 版本信息-App App Plyr ${version}`;
     document.body.appendChild(versionElement);
 
